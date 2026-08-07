@@ -3,6 +3,7 @@
 # Gizmo doc
 
 import bpy
+import gpu
 from bpy.types import (
     Operator,
     GizmoGroup,
@@ -13,6 +14,92 @@ from mathutils import Matrix, Vector
 from gpu_extras.batch import batch_for_shader
 
 from . import fn
+
+
+_capsule_shader = None
+_capsule_batch = None
+
+
+def capsule_shader_ensure():
+    global _capsule_shader, _capsule_batch
+    if _capsule_shader is not None:
+        return _capsule_shader, _capsule_batch
+
+    interface = gpu.types.GPUStageInterfaceInfo("storytools_capsule_interface")
+    interface.smooth('VEC2', "local_pos")
+
+    shader_info = gpu.types.GPUShaderCreateInfo()
+    shader_info.push_constant('VEC2', "center")
+    shader_info.push_constant('VEC2', "viewport_size")
+    shader_info.push_constant('VEC2', "half_size")
+    shader_info.push_constant('FLOAT', "radius")
+    shader_info.push_constant('FLOAT', "outline_width")
+    shader_info.push_constant('VEC4', "fill_color")
+    shader_info.push_constant('VEC4', "outline_color")
+    shader_info.vertex_in(0, 'VEC2', "position")
+    shader_info.vertex_out(interface)
+    shader_info.fragment_out(0, 'VEC4', "frag_color")
+    shader_info.vertex_source(
+        """
+        void main()
+        {
+          vec2 draw_half_size = half_size + vec2(2.0);
+          local_pos = position * draw_half_size;
+          vec2 pixel_pos = center + local_pos;
+          vec2 ndc = (pixel_pos / viewport_size) * 2.0 - 1.0;
+          gl_Position = vec4(ndc, 0.0, 1.0);
+        }
+        """
+    )
+    shader_info.fragment_source(
+        """
+        void main()
+        {
+          vec2 inner_size = half_size - vec2(radius);
+          vec2 q = abs(local_pos) - inner_size;
+          float distance = length(max(q, vec2(0.0)))
+                         + min(max(q.x, q.y), 0.0) - radius;
+
+          float outer_aa = max(fwidth(distance), 0.5);
+          float inner_aa = max(fwidth(distance) * 0.5, 0.25);
+          float outer_coverage = 1.0 - smoothstep(
+              -outer_aa, outer_aa, distance);
+          float fill_coverage = 1.0 - smoothstep(
+              -inner_aa, inner_aa, distance + outline_width);
+
+          vec4 color = mix(outline_color, fill_color, fill_coverage);
+          frag_color = vec4(color.rgb, color.a * outer_coverage);
+        }
+        """
+    )
+
+    _capsule_shader = gpu.shader.create_from_info(shader_info)
+    _capsule_batch = batch_for_shader(
+        _capsule_shader,
+        'TRI_STRIP',
+        {"position": ((-1, -1), (1, -1), (-1, 1), (1, 1))},
+    )
+    return _capsule_shader, _capsule_batch
+
+
+def draw_capsule(context, center, width, height):
+    shader, batch = capsule_shader_ensure()
+    ui_scale = context.preferences.system.ui_scale
+    half_size = (width * ui_scale / 2, height * ui_scale / 2)
+
+    shader.uniform_float("center", center)
+    shader.uniform_float("viewport_size", (context.region.width, context.region.height))
+    shader.uniform_float("half_size", half_size)
+    shader.uniform_float("radius", min(half_size))
+    shader.uniform_float("outline_width", context.preferences.system.pixel_size)
+    shader.uniform_float("fill_color", (0.0, 0.0, 0.0, 0.3))
+    shader.uniform_float("outline_color", (0.0, 0.0, 0.0, 0.4))
+
+    gpu.state.blend_set('ALPHA')
+    try:
+        batch.draw(shader)
+    finally:
+        gpu.state.blend_set('NONE')
 
 
 class STORYTOOLS_GGT_toolpreset_bar(GizmoGroup):

@@ -36,8 +36,16 @@ def toggle_gizmo_buttons(self, _):
         return
     ## set_class_registered is a no-op when already in the wanted state
     ## (assigning the same value from python would raise on a plain register_class)
-    changed = set_class_registered(gizmo_toolbar.STORYTOOLS_GGT_toolbar, self.active_toolbar)
-    set_class_registered(gizmo_toolbar.STORYTOOLS_GGT_toolbar_switch, self.active_toolbar)
+    if bpy.app.version >= (5, 2, 0):
+        classes = gizmo_toolbar.classes if self.active_toolbar else reversed(gizmo_toolbar.classes)
+        changed = False
+        for cls in classes:
+            class_changed = set_class_registered(cls, self.active_toolbar)
+            if cls == gizmo_toolbar.STORYTOOLS_GGT_toolbar:
+                changed = class_changed
+    else:
+        changed = set_class_registered(gizmo_toolbar.STORYTOOLS_GGT_toolbar, self.active_toolbar)
+        set_class_registered(gizmo_toolbar.STORYTOOLS_GGT_toolbar_switch, self.active_toolbar)
     if self.active_toolbar and changed:
         # Force active when user tick the box
         bpy.context.scene.storytools_settings.show_session_toolbar = True
@@ -268,7 +276,7 @@ class STORYTOOLS_prefs(bpy.types.AddonPreferences):
     toolbar_backdrop_size : IntProperty(
         name='Icon Backdrop Size',
         description="Backdrop size of the control icons (Blender gizmo buttons are around 14)",
-        default=18,
+        default=15 if bpy.app.version >= (5, 2, 0) else 18,
         min=12, max=30)
 
     toolbar_gap_size : IntProperty(
@@ -349,6 +357,18 @@ class STORYTOOLS_prefs(bpy.types.AddonPreferences):
         name="Active Buttons Color",
         description="Color when state of the button is active",
         default=(0.25, 0.43, 0.7), min=0, max=1.0, step=3, precision=2,
+        subtype='COLOR_GAMMA', size=3)
+
+    active_blue_gz_color : FloatVectorProperty(
+        name="Active Blue Color",
+        description="Color for active view lock and Grease Pencil draw buttons",
+        default=(0.372549, 0.564706, 0.854902), min=0, max=1.0, step=3, precision=2,
+        subtype='COLOR_GAMMA', size=3)
+
+    active_red_gz_color : FloatVectorProperty(
+        name="Active Red Color",
+        description="Color for active Auto Key and camera lock buttons",
+        default=(0.858824, 0.333333, 0.333333), min=0, max=1.0, step=3, precision=2,
         subtype='COLOR_GAMMA', size=3)
 
     ## Distance overlay color
@@ -613,11 +633,15 @@ class STORYTOOLS_prefs(bpy.types.AddonPreferences):
             # tool_col.prop(self, 'toolbar_icon_bounds')
             
             tool_col.separator()
-            
-            tool_col.prop(self, 'object_gz_color')
-            tool_col.prop(self, 'gp_gz_color')
-            tool_col.prop(self, 'camera_gz_color')
-            tool_col.prop(self, 'active_gz_color')
+
+            if bpy.app.version >= (5, 2, 0):
+                tool_col.prop(self, 'active_blue_gz_color')
+                tool_col.prop(self, 'active_red_gz_color')
+            else:
+                tool_col.prop(self, 'object_gz_color')
+                tool_col.prop(self, 'gp_gz_color')
+                tool_col.prop(self, 'camera_gz_color')
+                tool_col.prop(self, 'active_gz_color')
 
             tool_col.active = self.active_toolbar
 

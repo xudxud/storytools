@@ -74,14 +74,20 @@ def sync_gizmo_registration(prefs):
     """Register/unregister the gizmo groups to match the preference booleans"""
     from . import gizmo_toolbar, gizmo_toolpreset_bar
 
+    toolbar_classes = (
+        gizmo_toolbar.classes
+        if bpy.app.version >= (5, 2, 0)
+        else (gizmo_toolbar.STORYTOOLS_GGT_toolbar,
+              gizmo_toolbar.STORYTOOLS_GGT_toolbar_switch)
+    )
     targets = (
-        (prefs.active_toolbar, (gizmo_toolbar.STORYTOOLS_GGT_toolbar,
-                                gizmo_toolbar.STORYTOOLS_GGT_toolbar_switch)),
+        (prefs.active_toolbar, toolbar_classes),
         (prefs.active_presetbar, (gizmo_toolpreset_bar.STORYTOOLS_GGT_toolpreset_bar,)),
     )
 
     for enabled, classes in targets:
-        for cls in classes:
+        ordered_classes = classes if enabled else reversed(classes)
+        for cls in ordered_classes:
             set_class_registered(cls, enabled)
 
 
