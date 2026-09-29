@@ -62,6 +62,12 @@ def reload_toolpreset_buttons():
     bpy.utils.unregister_class(gizmo_toolpreset_bar.STORYTOOLS_GGT_toolpreset_bar)
     bpy.utils.register_class(gizmo_toolpreset_bar.STORYTOOLS_GGT_toolpreset_bar)
 
+def redraw_viewport_bars(self, context):
+    for window in context.window_manager.windows:
+        for area in window.screen.areas:
+            if area.type == 'VIEW_3D':
+                area.tag_redraw()
+
 class STORYTOOLS_OT_reload_toolpreset_ui(bpy.types.Operator):
     bl_idname = "storytools.reload_toolpreset_ui"
     bl_label = "Reload UI Presets"
@@ -279,6 +285,20 @@ class STORYTOOLS_prefs(bpy.types.AddonPreferences):
         default=15 if bpy.app.version >= (5, 2, 0) else 18,
         min=12, max=30)
 
+    toolbar_background_opacity : FloatProperty(
+        name='Background Opacity',
+        description="Opacity of the bottom control bar background",
+        default=0.3 if bpy.app.version >= (5, 2, 0) else 0.7,
+        min=0.0, max=1.0, subtype='FACTOR',
+        update=redraw_viewport_bars)
+
+    toolbar_background_color : FloatVectorProperty(
+        name='Background Color',
+        description="Color of the bottom control bar capsule background",
+        default=(0.0, 0.0, 0.0), min=0.0, max=1.0,
+        subtype='COLOR_GAMMA', size=3,
+        update=redraw_viewport_bars)
+
     toolbar_gap_size : IntProperty(
         name='Button Distance',
         description="Gap size between buttons in control bar",
@@ -304,6 +324,12 @@ class STORYTOOLS_prefs(bpy.types.AddonPreferences):
         description="Backdrop size of the preset bar icons (Blender gizmo buttons are around 14)",
         default=18,
         min=12, max=40)
+
+    presetbar_background_opacity : FloatProperty(
+        name='Background Opacity',
+        description="Opacity of the top tool preset button backgrounds",
+        default=0.0, min=0.0, max=1.0, subtype='FACTOR',
+        update=redraw_viewport_bars)
 
     ## Minimap settings
 
@@ -605,6 +631,7 @@ class STORYTOOLS_prefs(bpy.types.AddonPreferences):
             bcol.prop(self, 'presetbar_margin')
             bcol.prop(self, 'presetbar_gap_size', text='Buttons Spread')
             bcol.prop(self, 'presetbar_backdrop_size')
+            bcol.prop(self, 'presetbar_background_opacity')
 
             # col.separator()
 
@@ -630,6 +657,9 @@ class STORYTOOLS_prefs(bpy.types.AddonPreferences):
             tool_col.prop(self, 'toolbar_margin')
             tool_col.prop(self, 'toolbar_gap_size', text='Buttons Spread')
             tool_col.prop(self, 'toolbar_backdrop_size')
+            tool_col.prop(self, 'toolbar_background_opacity')
+            if bpy.app.version >= (5, 2, 0):
+                tool_col.prop(self, 'toolbar_background_color')
             # tool_col.prop(self, 'toolbar_icon_bounds')
             
             tool_col.separator()

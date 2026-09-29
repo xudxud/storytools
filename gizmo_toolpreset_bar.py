@@ -82,7 +82,7 @@ def capsule_shader_ensure():
     return _capsule_shader, _capsule_batch
 
 
-def draw_capsule(context, center, width, height):
+def draw_capsule(context, center, width, height, opacity=0.3, color=(0.0, 0.0, 0.0)):
     shader, batch = capsule_shader_ensure()
     ui_scale = context.preferences.system.ui_scale
     half_size = (width * ui_scale / 2, height * ui_scale / 2)
@@ -92,8 +92,8 @@ def draw_capsule(context, center, width, height):
     shader.uniform_float("half_size", half_size)
     shader.uniform_float("radius", min(half_size))
     shader.uniform_float("outline_width", context.preferences.system.pixel_size)
-    shader.uniform_float("fill_color", (0.0, 0.0, 0.0, 0.3))
-    shader.uniform_float("outline_color", (0.0, 0.0, 0.0, 0.4))
+    shader.uniform_float("fill_color", (*color, opacity))
+    shader.uniform_float("outline_color", (*color, min(opacity * 4 / 3, 1.0)))
 
     gpu.state.blend_set('ALPHA')
     try:
@@ -183,6 +183,7 @@ class STORYTOOLS_GGT_toolpreset_bar(GizmoGroup):
 
         for i, gz in enumerate(self.tool_preset_gizmos):
             gz.scale_basis = backdrop_size
+            gz.alpha = prefs.presetbar_background_opacity
             gz.color = (0.4, 0.4, 0.4)
             gz.color_highlight = (0.5, 0.5, 0.5)
 

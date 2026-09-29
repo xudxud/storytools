@@ -45,8 +45,12 @@ class STORYTOOLS_GT_toolbar_background(Gizmo):
     __slots__ = ("capsules",)
 
     def draw(self, context):
+        prefs = get_addon_prefs()
+        opacity = prefs.toolbar_background_opacity
+        if opacity == 0:
+            return
         for center, width, height in self.capsules:
-            draw_capsule(context, center, width, height)
+            draw_capsule(context, center, width, height, opacity, prefs.toolbar_background_color)
 
     def test_select(self, context, location):
         return -1
@@ -114,12 +118,6 @@ class STORYTOOLS_GGT_toolbar(GizmoGroup):
         return not fn.is_minimap_viewport(context)
 
     def setup(self, context):
-        if USE_CAPSULE_UI:
-            self.background_gizmo = self.gizmos.new(
-                "STORYTOOLS_GT_toolbar_background"
-            )
-            self.background_gizmo.capsules = []
-
         ## --- Object
 
         self.object_gizmos = []
@@ -294,6 +292,12 @@ class STORYTOOLS_GGT_toolbar(GizmoGroup):
         if USE_CAPSULE_UI:
             for gz in self.button_gizmos:
                 gz.draw_options = set()
+            # Blender draws gizmos in reverse creation order; add the capsule last
+            # so it is rendered behind the buttons, even at full opacity.
+            self.background_gizmo = self.gizmos.new(
+                "STORYTOOLS_GT_toolbar_background"
+            )
+            self.background_gizmo.capsules = []
 
     def draw_prepare(self, context):
         if USE_CAPSULE_UI:
@@ -360,6 +364,8 @@ class STORYTOOLS_GGT_toolbar(GizmoGroup):
 
         for i, gz in enumerate(self.gizmos):
             gz.scale_basis = backdrop_size
+            gz.alpha = prefs.toolbar_background_opacity
+            gz.alpha_highlight = prefs.toolbar_background_opacity
             if gz in self.object_gizmos:
                 gz.color = obj_color
                 gz.color_highlight = obj_color_hl
