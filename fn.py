@@ -780,7 +780,8 @@ def create_gp_object(
         location=None,
         material_from_obj=None,
         layer_from_obj=None,
-        context=None):
+        context=None,
+        initial_frame=None):
     """
     Create a new grease pencil object with specified parameters.
     
@@ -794,6 +795,7 @@ def create_gp_object(
         enter_draw_mode: Whether to enter draw mode after creation
         location: Explicit location to use instead of cursor or view (override other if provided)
         context: Blender context, optional
+        initial_frame: Frame for initial layer keyframes (defaults to the current frame)
         
     Returns:
         The created Grease Pencil object
@@ -805,6 +807,8 @@ def create_gp_object(
     # Get references
     prefs = get_addon_prefs()
     scn = context.scene
+    if initial_frame is None:
+        initial_frame = scn.frame_current
     
     # Ensure we're in object mode
     if context.object and context.object.visible_get() and context.mode != 'OBJECT':
@@ -896,7 +900,7 @@ def create_gp_object(
     if layer_from_obj and len(layer_from_obj.data.layers):
         for ref_layer in layer_from_obj.data.layers:
             layer = gp.layers.new(ref_layer.name)
-            layer.frames.new(scn.frame_current)
+            layer.frames.new(initial_frame)
             ## get same use light and opacity settings
             layer.use_lights = ref_layer.use_lights
             layer.opacity = ref_layer.opacity
@@ -908,7 +912,7 @@ def create_gp_object(
 
     else:
         # Create default layers
-        create_default_layers(ob, use_lights=prefs.use_lights)
+        create_default_layers(ob, frame=initial_frame, use_lights=prefs.use_lights)
     
     ## Add default modifiers and effects from preferences
     if prefs.use_hsv_modifier:

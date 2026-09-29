@@ -124,6 +124,17 @@ class STORYTOOLS_OT_create_object(Operator):
         options={'SKIP_SAVE'}
     )
 
+    initial_frame : EnumProperty(
+        name="Initial Keyframe",
+        description="Frame on which to create the initial keyframe for each layer",
+        items=(
+            ('CURRENT', 'Current Frame', "Create initial keyframes at the current frame"),
+            ('SCENE_START', 'Scene Start', "Create initial keyframes at the scene start frame"),
+        ),
+        default='CURRENT',
+        options={'SKIP_SAVE'}
+    )
+
     # add option to enter draw mode ? (always On currently, probably best)
 
     def invoke(self, context, event):
@@ -154,6 +165,7 @@ class STORYTOOLS_OT_create_object(Operator):
         layout = self.layout
         layout.use_property_split = True
         layout.prop(self, 'name')
+        layout.prop(self, 'initial_frame')
 
         # layout.label(text='Relation To Camera:')
         layout.prop(self, 'parented')
@@ -212,6 +224,8 @@ class STORYTOOLS_OT_create_object(Operator):
             location=loc,
             layer_from_obj=ref_layers,
             material_from_obj=ref_mats,
+            initial_frame=(context.scene.frame_start if self.initial_frame == 'SCENE_START'
+                           else context.scene.frame_current),
             context=context
         )
 
