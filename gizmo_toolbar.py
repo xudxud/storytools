@@ -10,7 +10,46 @@ from bpy.types import (
 from mathutils import Matrix, Vector
 from gpu_extras.batch import batch_for_shader
 from .fn import get_addon_prefs
+from .gizmo_toolpreset_bar import draw_capsule
 from . import fn
+
+
+USE_CAPSULE_UI = bpy.app.version >= (5, 2, 0)
+
+
+def toolbar_capsule_from_gizmos(gizmos, px_scale, backdrop_size):
+    positions = [gz.matrix_basis.to_translation() for gz in gizmos]
+    min_x = min(pos.x for pos in positions)
+    max_x = max(pos.x for pos in positions)
+    min_y = min(pos.y for pos in positions)
+    max_y = max(pos.y for pos in positions)
+    center = ((min_x + max_x) / 2, (min_y + max_y) / 2)
+    width = ((max_x - min_x) / px_scale) + (backdrop_size * 2)
+    # Button diameter plus 20% radius padding on each side.
+    height = ((max_y - min_y) / px_scale) + (backdrop_size * 2.4)
+    return center, width, height
+
+
+def set_toolbar_button_state(gizmo, active=False, color=None):
+    gizmo.draw_options = {'BACKDROP'} if active else set()
+    gizmo.alpha = 1.0
+    gizmo.alpha_highlight = 1.0
+    if active:
+        gizmo.color = color
+        gizmo.color_highlight = color
+
+
+class STORYTOOLS_GT_toolbar_background(Gizmo):
+    bl_idname = "STORYTOOLS_GT_toolbar_background"
+
+    __slots__ = ("capsules",)
+
+    def draw(self, context):
+        for center, width, height in self.capsules:
+            draw_capsule(context, center, width, height)
+
+    def test_select(self, context, location):
+        return -1
 
 
 
@@ -75,6 +114,12 @@ class STORYTOOLS_GGT_toolbar(GizmoGroup):
         return not fn.is_minimap_viewport(context)
 
     def setup(self, context):
+        if USE_CAPSULE_UI:
+            self.background_gizmo = self.gizmos.new(
+                "STORYTOOLS_GT_toolbar_background"
+            )
+            self.background_gizmo.capsules = []
+
         ## --- Object
 
         self.object_gizmos = []
@@ -238,7 +283,22 @@ class STORYTOOLS_GGT_toolbar(GizmoGroup):
         op.name = 'STORYTOOLS_PT_gp_settings_ui' # panel name
         self.gpencil_gizmos.append(self.gz_gp_setting)
 
+        self.button_gizmos = (
+            self.object_gizmos
+            + self.camera_gizmos
+            + self.interact_gizmos
+            + self.gpencil_gizmos
+        )
+        self.settings_gizmos = [self.gz_gp_setting] + self.gpencil_gizmos[:-1]
+
+        if USE_CAPSULE_UI:
+            for gz in self.button_gizmos:
+                gz.draw_options = set()
+
     def draw_prepare(self, context):
+        if USE_CAPSULE_UI:
+            return self.draw_prepare_capsule(context)
+
         prefs = get_addon_prefs()
         settings = context.scene.storytools_settings
         gap_size = prefs.toolbar_gap_size
@@ -365,6 +425,114 @@ class STORYTOOLS_GGT_toolbar(GizmoGroup):
         ## Autokey toggle color
         self.gz_autokey.color = red if context.scene.tool_settings.use_keyframe_insert_auto else obj_color
         self.gz_autokey.color_highlight = red_hl if context.scene.tool_settings.use_keyframe_insert_auto else obj_color_hl
+
+    def draw_prepare_capsule(self, context):
+        prefs = get_addon_prefs()
+        settings = context.scene.storytools_settings
+        gap_size = prefs.toolbar_gap_size
+        backdrop_size = prefs.toolbar_backdrop_size
+
+        section_separator = int(gap_size / 2)
+        px_scale = context.preferences.system.ui_scale
+        hide_gizmos = not settings.show_session_toolbar or not context.space_data.show_gizmo
+        self.background_gizmo.hide = hide_gizmos
+        for gz in self.button_gizmos:
+            gz.hide = hide_gizmos
+        if hide_gizmos:
+            return
+
+        region = context.region
+        count = len(self.object_gizmos + self.camera_gizmos + self.interact_gizmos)
+        sidebar_width = next((r.width for r in context.area.regions if r.type == 'UI'), 0)
+
+        bar_width = (count - 1) * (gap_size * px_scale) + (section_separator * 2) * px_scale
+        vertical_pos = prefs.toolbar_margin * px_scale + fn.get_header_margin(context, overlap=False)
+        left_pos = region.width / 2 - bar_width / 2
+
+        visible_region = region.width - sidebar_width
+        overlap = (left_pos + bar_width + section_separator) - visible_region
+        if overlap > 0:
+            left_pos -= overlap
+
+        if left_pos < section_separator:
+            out_size = abs(left_pos - section_separator)
+            reduction_factor = visible_region / (visible_region + out_size)
+
+            left_pos = section_separator
+            backdrop_size = max(backdrop_size * reduction_factor, 14)
+            gap_size = max(gap_size * reduction_factor, backdrop_size * 2)
+            section_separator = max(section_separator * reduction_factor, gap_size / 2)
+
+        init_left_pos = left_pos
+        next_pos = gap_size * px_scale
+        button_index = 0
+
+        for group_index, gizmos in enumerate((
+            self.object_gizmos,
+            self.camera_gizmos,
+            self.interact_gizmos,
+        )):
+            if group_index:
+                left_pos += section_separator
+            for gz in gizmos:
+                gz.scale_basis = backdrop_size
+                gz.matrix_basis = Matrix.Translation(
+                    (left_pos + (button_index * next_pos), vertical_pos, 0)
+                )
+                button_index += 1
+
+        gpencil_hide_state = not context.object or context.object.type != 'GREASEPENCIL'
+        capsule_height = backdrop_size * 2.4
+        settings_vertical_pos = vertical_pos + (capsule_height + 10) * px_scale
+        for i, gz in enumerate(self.settings_gizmos):
+            gz.scale_basis = backdrop_size
+            gz.hide = gpencil_hide_state
+            gz.matrix_basis = Matrix.Translation(
+                (init_left_pos + (i * next_pos), settings_vertical_pos, 0)
+            )
+        self.gz_gp_setting.scale_basis = 10
+
+        capsules = []
+        for gizmos in (
+            self.object_gizmos,
+            self.camera_gizmos,
+            self.interact_gizmos,
+        ):
+            capsules.append(
+                toolbar_capsule_from_gizmos(gizmos, px_scale, backdrop_size)
+            )
+        if not gpencil_hide_state:
+            capsules.append(
+                toolbar_capsule_from_gizmos(
+                    self.settings_gizmos, px_scale, backdrop_size
+                )
+            )
+        self.background_gizmo.capsules = capsules
+
+        for gz in self.button_gizmos:
+            set_toolbar_button_state(gz)
+
+        active_blue = prefs.active_blue_gz_color
+        active_red = prefs.active_red_gz_color
+        set_toolbar_button_state(
+            self.gz_lock_cam,
+            context.space_data.lock_camera,
+            active_red,
+        )
+        set_toolbar_button_state(
+            self.gz_lock_view,
+            context.space_data.region_3d.lock_rotation,
+            active_blue,
+        )
+        set_toolbar_button_state(
+            self.gz_draw,
+            context.mode == 'PAINT_GREASE_PENCIL',
+            active_blue,
+        )
+
+        autokey_active = context.scene.tool_settings.use_keyframe_insert_auto
+        self.gz_autokey.icon = 'RECORD_ON' if autokey_active else 'RECORD_OFF'
+        set_toolbar_button_state(self.gz_autokey, autokey_active, active_red)
 
 
     # def refresh(self, context):
@@ -648,6 +816,7 @@ classes=(
     STORYTOOLS_OT_toggle_bottom_bar,
     VIEW3D_GT_toggler_shape_widget,
     STORYTOOLS_GGT_toolbar_switch,
+    STORYTOOLS_GT_toolbar_background,
     STORYTOOLS_GGT_toolbar,
 )
 
