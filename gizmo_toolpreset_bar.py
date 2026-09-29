@@ -70,6 +70,26 @@ def active_preset_signature(context):
     return None
 
 
+def active_preset_button_index(signature, button_props):
+    """Find the visible button even if Blender refreshed the user keymap after setup."""
+    if signature is None:
+        return None
+
+    for i, props in enumerate(button_props):
+        if preset_signature(props) == signature:
+            return i
+
+    # The user keyconfig may finish loading after the gizmo group's setup. Its
+    # saved RNA properties can then be stale, while shortcuts use the new ones.
+    current_props = [kmi.properties for _km, kmi in fn.get_tool_presets_keymap()
+                     if kmi.active and kmi.properties.show]
+    if len(current_props) == len(button_props):
+        for i, props in enumerate(current_props):
+            if preset_signature(props) == signature:
+                return i
+    return None
+
+
 def capsule_from_gizmos(gizmos, px_scale, backdrop_size):
     positions = [gz.matrix_basis.to_translation() for gz in gizmos]
     min_x = min(pos.x for pos in positions)
@@ -270,11 +290,12 @@ class STORYTOOLS_GGT_toolpreset_bar(GizmoGroup):
         next_pos = gap_size * px_scale
 
         selected_preset = active_preset_signature(context)
+        selected_index = active_preset_button_index(selected_preset, self.tool_preset_props)
         active_blue = prefs.active_blue_gz_color if USE_CAPSULE_UI else prefs.active_gz_color
 
-        for i, (gz, props) in enumerate(zip(self.tool_preset_gizmos, self.tool_preset_props)):
+        for i, gz in enumerate(self.tool_preset_gizmos):
             gz.scale_basis = backdrop_size
-            active = selected_preset is not None and preset_signature(props) == selected_preset
+            active = i == selected_index
             gz.draw_options = ({'BACKDROP'} if active else set()) if USE_CAPSULE_UI else {'BACKDROP', 'OUTLINE'}
             gz.alpha = 1.0 if active or USE_CAPSULE_UI else prefs.presetbar_background_opacity
             gz.alpha_highlight = 1.0 if active else 0.6
