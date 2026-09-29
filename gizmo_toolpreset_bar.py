@@ -45,10 +45,19 @@ def drawing_state(context, check_material=False):
 
 def activate_preset(context, props):
     """Called by the shared operator, including when invoked from a keymap."""
+    set_activated_signature(context, preset_signature(props))
+
+
+def set_activated_signature(context, signature):
+    """Update the bar after selecting or undoing a preset."""
     if context.window is None:
         return
-    _activated_presets[context.window.as_pointer()] = (
-        preset_signature(props), drawing_state(context, check_material=bool(props.material)))
+    window_key = context.window.as_pointer()
+    if signature is None:
+        _activated_presets.pop(window_key, None)
+    else:
+        _activated_presets[window_key] = (
+            signature, drawing_state(context, check_material=bool(signature[6])))
     for area in context.window.screen.areas:
         if area.type == 'VIEW_3D':
             area.tag_redraw()

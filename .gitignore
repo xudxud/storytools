@@ -3,4 +3,5 @@ __pycache__
 *.blend1
 pyrightconfig.json
 *.vscode
-tests
+tests/*
+!tests/test_preset_undo.py

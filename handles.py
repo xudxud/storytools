@@ -1,5 +1,6 @@
 import bpy
 from bpy.app.handlers import persistent
+from . import preset_undo
 from .constants import LAYERMAT_PREFIX, LAYERSTROKE_PREFIX, LAYERBRUSH_PREFIX
 from .fn import (get_addon_prefs,
                  store_layer_brush,
@@ -11,6 +12,7 @@ from .fn import (get_addon_prefs,
 ## Tracks the previously active layer as (object_name, layer_name) so a layer change can
 ## attribute the outgoing layer's brush before restoring the incoming one. Reset on file load.
 _prev_layer = None
+_undo_redo_in_progress = False
 
 def get_object_and_scene():# -> tuple[None, None] | tuple[Any | None, Any]:
     """return scene and active object if object is a GP
@@ -48,6 +50,9 @@ def get_object_and_scene():# -> tuple[None, None] | tuple[Any | None, Any]:
 
 def layer_change_callback():
     # print('Layer has changed!')
+
+    if _undo_redo_in_progress:
+        return
 
     ## Disable Sync when sidebar is not visible ?
     ## TODO: Add the settings also in material settings panel to keep sync when panel is disabled
@@ -114,13 +119,18 @@ def subscribe_layer():
 @persistent
 def subscribe_layer_handler(dummy):
     ## reset the previous-layer tracker so a freshly opened file cannot mis-attribute a brush
-    global _prev_layer
+    global _prev_layer, _undo_redo_in_progress
     _prev_layer = None
+    _undo_redo_in_progress = False
+    preset_undo.clear()
     subscribe_layer()
 
 ## material callback
 def material_change_callback():
     # print(f'{bpy.context.object.name}: Material has changed!')
+
+    if _undo_redo_in_progress:
+        return
 
     ## Disable Sync when sidebar is not visible
     ## TODO: add the settings also in material settings panel to keep sync when panel is disabled
@@ -177,6 +187,35 @@ def subscribe_material():
 def subscribe_material_handler(dummy):
     subscribe_material()
 
+@persistent
+def undo_redo_pre(_dummy):
+    global _undo_redo_in_progress
+    _undo_redo_in_progress = True
+    preset_undo.undo_redo_pre()
+
+
+@persistent
+def undo_redo_post(_dummy):
+    """Undo can restore a GP layer and its active material from different steps.
+
+    Restore the material paired with the resulting layer without recording the
+    transient, undone material as that layer's new association.
+    """
+    global _undo_redo_in_progress, _prev_layer
+    try:
+        restored_preset = preset_undo.undo_redo_post()
+        scn, ob = get_object_and_scene()
+        if scn is None or ob is None:
+            return
+        layer = ob.data.layers.active
+        if layer is None:
+            return
+        _prev_layer = (ob.name, layer.name)
+        if not restored_preset and bpy.context.mode == 'PAINT_GREASE_PENCIL' and get_addon_prefs().show_sidebar_ui:
+            restore_layer_material(scn, ob, layer, scn.storytools_settings.material_sync)
+    finally:
+        _undo_redo_in_progress = False
+
 ## Note: the brush per-layer association is handled entirely from layer_change_callback
 ## (store-on-layer-leave), because activating a brush through the asset system emits no
 ## msg_bus notification we could subscribe to. See layer_change_callback above.
@@ -191,9 +230,20 @@ def register():
     # Add a load handler when opening other blends (does not seeem to add msgbus twice)
     bpy.app.handlers.load_post.append(subscribe_layer_handler)
     bpy.app.handlers.load_post.append(subscribe_material_handler) # Need to restart after first activation
+    bpy.app.handlers.undo_pre.append(undo_redo_pre)
+    bpy.app.handlers.undo_post.append(undo_redo_post)
+    bpy.app.handlers.redo_pre.append(undo_redo_pre)
+    bpy.app.handlers.redo_post.append(undo_redo_post)
 
 
 def unregister():
+    global _undo_redo_in_progress
+    _undo_redo_in_progress = False
+    preset_undo.clear()
+    bpy.app.handlers.redo_post.remove(undo_redo_post)
+    bpy.app.handlers.redo_pre.remove(undo_redo_pre)
+    bpy.app.handlers.undo_post.remove(undo_redo_post)
+    bpy.app.handlers.undo_pre.remove(undo_redo_pre)
     bpy.app.handlers.load_post.remove(subscribe_material_handler)
     bpy.app.handlers.load_post.remove(subscribe_layer_handler)
 

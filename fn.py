@@ -1277,14 +1277,16 @@ def set_material_by_name(ob, mat_name) -> None:
         m = ms.material
         if m.name == mat_name:
             # print(f':{i}:', m.name, ob.active_material_index)
-            ob.active_material_index = i
+            if ob.active_material_index != i:
+                ob.active_material_index = i
             return
 
 def set_layer_by_name(ob, name):
     if name is None or name == '':
         return
     if target_layer := ob.data.layers.get(name):
-        ob.data.layers.active = target_layer
+        if ob.data.layers.active != target_layer:
+            ob.data.layers.active = target_layer
 
 ### ---
 # region Animation

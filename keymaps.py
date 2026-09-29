@@ -173,6 +173,10 @@ class STORYTOOLS_OT_set_draw_tool(bpy.types.Operator):
             return {"CANCELLED"}
 
         ob = context.object
+        from . import preset_undo
+        from .gizmo_toolpreset_bar import active_preset_signature
+        previous_signature = active_preset_signature(context) if context.window else None
+        previous_preset_state = preset_undo.capture_state(context)
 
         ## Brush layer-sync precedence: preset-specified brush/stroke_type always win (per-field).
         ## Unspecified fields take the target layer's paired values.
@@ -241,6 +245,7 @@ class STORYTOOLS_OT_set_draw_tool(bpy.types.Operator):
             bpy.context.window_manager["skip_material_sync_flag"] = True
             fn.set_material_by_name(ob, self.material)
 
+        preset_undo.record_preset(context, previous_preset_state, self, previous_signature)
         from .gizmo_toolpreset_bar import activate_preset
         activate_preset(context, self)
         return {"FINISHED"}
