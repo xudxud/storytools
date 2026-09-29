@@ -55,7 +55,9 @@ def toggle_toolpreset_buttons(self, _):
     from .prefs_io_core import is_restoring, set_class_registered
     if is_restoring():
         return
-    set_class_registered(gizmo_toolpreset_bar.STORYTOOLS_GGT_toolpreset_bar, self.active_presetbar)
+    classes = gizmo_toolpreset_bar.classes if self.active_presetbar else reversed(gizmo_toolpreset_bar.classes)
+    for cls in classes:
+        set_class_registered(cls, self.active_presetbar)
 
 def reload_toolpreset_buttons():
     from . import gizmo_toolpreset_bar
@@ -63,6 +65,9 @@ def reload_toolpreset_buttons():
     bpy.utils.register_class(gizmo_toolpreset_bar.STORYTOOLS_GGT_toolpreset_bar)
 
 def redraw_viewport_bars(self, context):
+    from .prefs_io_core import is_restoring
+    if is_restoring():
+        return
     for window in context.window_manager.windows:
         for area in window.screen.areas:
             if area.type == 'VIEW_3D':
@@ -269,7 +274,7 @@ class STORYTOOLS_prefs(bpy.types.AddonPreferences):
     toolbar_margin : IntProperty(
         name='Control Bar Margin',
         description="Space margin between viewport and bottom tool bar Gizmo buttons",
-        default=36,
+        default=21,
         soft_min=-100, soft_max=500,
         min=-1000, max=1000)
     
@@ -282,13 +287,13 @@ class STORYTOOLS_prefs(bpy.types.AddonPreferences):
     toolbar_backdrop_size : IntProperty(
         name='Icon Backdrop Size',
         description="Backdrop size of the control icons (Blender gizmo buttons are around 14)",
-        default=15 if bpy.app.version >= (5, 2, 0) else 18,
+        default=15,
         min=12, max=30)
 
     toolbar_background_opacity : FloatProperty(
         name='Background Opacity',
         description="Opacity of the bottom control bar background",
-        default=0.3 if bpy.app.version >= (5, 2, 0) else 0.7,
+        default=0.77,
         min=0.0, max=1.0, subtype='FACTOR',
         update=redraw_viewport_bars)
 
@@ -309,26 +314,34 @@ class STORYTOOLS_prefs(bpy.types.AddonPreferences):
     presetbar_margin : IntProperty(
         name='Preset Bar Margin',
         description="Space margin between viewport border and tool preset buttons",
-        default=18,
+        default=21,
         soft_min=-100, soft_max=500,
         min=-1000, max=1000)
     
     presetbar_gap_size : IntProperty(
         name='Preset Bar Button Distance',
         description="Gap size between buttons in tool presets bar",
-        default=44,
+        default=40,
         min=20, max=200)
 
     presetbar_backdrop_size : IntProperty(
         name='Icon Backdrop Size',
         description="Backdrop size of the preset bar icons (Blender gizmo buttons are around 14)",
-        default=18,
+        default=15,
         min=12, max=40)
 
     presetbar_background_opacity : FloatProperty(
         name='Background Opacity',
-        description="Opacity of the top tool preset button backgrounds",
-        default=0.0, min=0.0, max=1.0, subtype='FACTOR',
+        description="Opacity of the top tool preset bar background",
+        default=0.77,
+        min=0.0, max=1.0, subtype='FACTOR',
+        update=redraw_viewport_bars)
+
+    presetbar_background_color : FloatVectorProperty(
+        name='Background Color',
+        description="Color of the top tool preset bar capsule background",
+        default=(0.0, 0.0, 0.0), min=0.0, max=1.0,
+        subtype='COLOR_GAMMA', size=3,
         update=redraw_viewport_bars)
 
     ## Minimap settings
@@ -632,6 +645,8 @@ class STORYTOOLS_prefs(bpy.types.AddonPreferences):
             bcol.prop(self, 'presetbar_gap_size', text='Buttons Spread')
             bcol.prop(self, 'presetbar_backdrop_size')
             bcol.prop(self, 'presetbar_background_opacity')
+            if bpy.app.version >= (5, 2, 0):
+                bcol.prop(self, 'presetbar_background_color')
 
             # col.separator()
 

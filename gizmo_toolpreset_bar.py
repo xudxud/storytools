@@ -18,6 +18,59 @@ from . import fn
 
 _capsule_shader = None
 _capsule_batch = None
+USE_CAPSULE_UI = bpy.app.version >= (5, 2, 0)
+_activated_presets = {}
+
+
+def preset_signature(props):
+    """Identify the preset selected by either a shortcut or a bar button."""
+    return (props.name, props.order, props.mode, props.tool, props.brush,
+            props.layer, props.material, props.stroke_type)
+
+
+def drawing_state(context, check_material=False):
+    """Capture the state after a preset runs, to invalidate its highlight on later changes."""
+    ob = context.object
+    tool = context.workspace.tools.from_space_view3d_mode(context.mode, create=False)
+    layer = ob.data.layers.active if ob and ob.type == 'GREASEPENCIL' else None
+    paint = context.tool_settings.gpencil_paint if context.mode == 'PAINT_GREASE_PENCIL' else None
+    brush = paint.brush if paint else None
+    material = ob.active_material if check_material and ob and ob.type == 'GREASEPENCIL' else None
+    stroke_type = brush.gpencil_settings.stroke_type if brush and brush.gpencil_settings else None
+    return (context.scene.as_pointer(), ob.as_pointer() if ob else None, context.mode,
+            tool.idname if tool else '', layer.name if layer else '',
+            brush.as_pointer() if brush else None, stroke_type,
+            material.as_pointer() if material else None)
+
+
+def activate_preset(context, props):
+    """Called by the shared operator, including when invoked from a keymap."""
+    if context.window is None:
+        return
+    _activated_presets[context.window.as_pointer()] = (
+        preset_signature(props), drawing_state(context, check_material=bool(props.material)))
+    for area in context.window.screen.areas:
+        if area.type == 'VIEW_3D':
+            area.tag_redraw()
+
+
+def active_preset_signature(context):
+    activation = _activated_presets.get(context.window.as_pointer())
+    if activation and activation[1] == drawing_state(context, check_material=bool(activation[0][6])):
+        return activation[0]
+    return None
+
+
+def capsule_from_gizmos(gizmos, px_scale, backdrop_size):
+    positions = [gz.matrix_basis.to_translation() for gz in gizmos]
+    min_x = min(pos.x for pos in positions)
+    max_x = max(pos.x for pos in positions)
+    min_y = min(pos.y for pos in positions)
+    max_y = max(pos.y for pos in positions)
+    center = ((min_x + max_x) / 2, (min_y + max_y) / 2)
+    width = ((max_x - min_x) / px_scale) + (backdrop_size * 2)
+    height = ((max_y - min_y) / px_scale) + (backdrop_size * 2.4)
+    return center, width, height
 
 
 def capsule_shader_ensure():
@@ -102,6 +155,22 @@ def draw_capsule(context, center, width, height, opacity=0.3, color=(0.0, 0.0, 0
         gpu.state.blend_set('NONE')
 
 
+class STORYTOOLS_GT_presetbar_background(Gizmo):
+    bl_idname = "STORYTOOLS_GT_presetbar_background"
+
+    __slots__ = ("capsule",)
+
+    def draw(self, context):
+        prefs = fn.get_addon_prefs()
+        if self.capsule and prefs.presetbar_background_opacity:
+            draw_capsule(context, *self.capsule,
+                         prefs.presetbar_background_opacity,
+                         prefs.presetbar_background_color)
+
+    def test_select(self, context, location):
+        return -1
+
+
 class STORYTOOLS_GGT_toolpreset_bar(GizmoGroup):
     # bl_idname = "STORYTOOLS_GGT_toolbar"
     bl_label = "Story Tool Preset Bar"
@@ -119,6 +188,7 @@ class STORYTOOLS_GGT_toolpreset_bar(GizmoGroup):
     def setup(self, context):
 
         self.tool_preset_gizmos = []
+        self.tool_preset_props = []
 
         ## Object Pan
         user_keymaps = bpy.context.window_manager.keyconfigs.user.keymaps
@@ -142,7 +212,8 @@ class STORYTOOLS_GGT_toolpreset_bar(GizmoGroup):
 
             op = gz.target_set_operator("storytools.set_draw_tool")
             op.name = props.name
-            # op.mode = props.mode # Default Keymap currently limited to Paint mode
+            op.order = props.order
+            op.mode = props.mode
             op.tool = props.tool
             op.layer = props.layer
             op.material = props.material
@@ -151,6 +222,14 @@ class STORYTOOLS_GGT_toolpreset_bar(GizmoGroup):
             op.description = props.description
             op.shortcut = kmi.to_string() # Shortcut text for description
             self.tool_preset_gizmos.append(gz)
+            self.tool_preset_props.append(props)
+
+        if USE_CAPSULE_UI:
+            for gz in self.tool_preset_gizmos:
+                gz.draw_options = set()
+            # Gizmos draw in reverse creation order, so the capsule goes behind the icons.
+            self.background_gizmo = self.gizmos.new("STORYTOOLS_GT_presetbar_background")
+            self.background_gizmo.capsule = None
 
     def draw_prepare(self, context):
         prefs = fn.get_addon_prefs()
@@ -170,7 +249,7 @@ class STORYTOOLS_GGT_toolpreset_bar(GizmoGroup):
             return
         
         region = context.region
-        count = len(self.gizmos)
+        count = len(self.tool_preset_gizmos)
 
         ## Using only direct offsetn
         self.bar_width = (count - 1) * (gap_size * px_scale) + (section_separator * 2) * px_scale
@@ -181,18 +260,31 @@ class STORYTOOLS_GGT_toolpreset_bar(GizmoGroup):
         left_pos = region.width / 2 - self.bar_width / 2
         next_pos = gap_size * px_scale
 
-        for i, gz in enumerate(self.tool_preset_gizmos):
+        selected_preset = active_preset_signature(context)
+        active_blue = prefs.active_blue_gz_color if USE_CAPSULE_UI else prefs.active_gz_color
+
+        for i, (gz, props) in enumerate(zip(self.tool_preset_gizmos, self.tool_preset_props)):
             gz.scale_basis = backdrop_size
-            gz.alpha = prefs.presetbar_background_opacity
-            gz.color = (0.4, 0.4, 0.4)
-            gz.color_highlight = (0.5, 0.5, 0.5)
+            active = selected_preset is not None and preset_signature(props) == selected_preset
+            gz.draw_options = ({'BACKDROP'} if active else set()) if USE_CAPSULE_UI else {'BACKDROP', 'OUTLINE'}
+            gz.alpha = 1.0 if active or USE_CAPSULE_UI else prefs.presetbar_background_opacity
+            gz.alpha_highlight = 1.0 if active else 0.6
+            gz.color = active_blue if active else (0.4, 0.4, 0.4)
+            gz.color_highlight = active_blue if active else (0.5, 0.5, 0.5)
 
             ## Matrix world is readonly
             gz.matrix_basis = Matrix.Translation((left_pos + (i * next_pos), vertical_pos, 0))
 
+        if USE_CAPSULE_UI:
+            self.background_gizmo.capsule = (
+                capsule_from_gizmos(self.tool_preset_gizmos, px_scale, backdrop_size)
+                if self.tool_preset_gizmos else None
+            )
+
 
 classes=(
-    STORYTOOLS_GGT_toolpreset_bar,
+    (STORYTOOLS_GT_presetbar_background, STORYTOOLS_GGT_toolpreset_bar)
+    if USE_CAPSULE_UI else (STORYTOOLS_GGT_toolpreset_bar,)
 )
 
 def register():
@@ -202,7 +294,7 @@ def register():
         bpy.utils.register_class(cls)
 
 def unregister():
-    if not fn.get_addon_prefs().active_presetbar:
-        return
+    from .prefs_io_core import is_class_registered
     for cls in reversed(classes):
-        bpy.utils.unregister_class(cls)
+        if is_class_registered(cls):
+            bpy.utils.unregister_class(cls)

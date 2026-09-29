@@ -10,24 +10,11 @@ from bpy.types import (
 from mathutils import Matrix, Vector
 from gpu_extras.batch import batch_for_shader
 from .fn import get_addon_prefs
-from .gizmo_toolpreset_bar import draw_capsule
+from .gizmo_toolpreset_bar import draw_capsule, capsule_from_gizmos
 from . import fn
 
 
 USE_CAPSULE_UI = bpy.app.version >= (5, 2, 0)
-
-
-def toolbar_capsule_from_gizmos(gizmos, px_scale, backdrop_size):
-    positions = [gz.matrix_basis.to_translation() for gz in gizmos]
-    min_x = min(pos.x for pos in positions)
-    max_x = max(pos.x for pos in positions)
-    min_y = min(pos.y for pos in positions)
-    max_y = max(pos.y for pos in positions)
-    center = ((min_x + max_x) / 2, (min_y + max_y) / 2)
-    width = ((max_x - min_x) / px_scale) + (backdrop_size * 2)
-    # Button diameter plus 20% radius padding on each side.
-    height = ((max_y - min_y) / px_scale) + (backdrop_size * 2.4)
-    return center, width, height
 
 
 def set_toolbar_button_state(gizmo, active=False, color=None):
@@ -505,11 +492,11 @@ class STORYTOOLS_GGT_toolbar(GizmoGroup):
             self.interact_gizmos,
         ):
             capsules.append(
-                toolbar_capsule_from_gizmos(gizmos, px_scale, backdrop_size)
+                capsule_from_gizmos(gizmos, px_scale, backdrop_size)
             )
         if not gpencil_hide_state:
             capsules.append(
-                toolbar_capsule_from_gizmos(
+                capsule_from_gizmos(
                     self.settings_gizmos, px_scale, backdrop_size
                 )
             )

@@ -82,7 +82,7 @@ def sync_gizmo_registration(prefs):
     )
     targets = (
         (prefs.active_toolbar, toolbar_classes),
-        (prefs.active_presetbar, (gizmo_toolpreset_bar.STORYTOOLS_GGT_toolpreset_bar,)),
+        (prefs.active_presetbar, gizmo_toolpreset_bar.classes),
     )
 
     for enabled, classes in targets:

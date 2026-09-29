@@ -241,6 +241,8 @@ class STORYTOOLS_OT_set_draw_tool(bpy.types.Operator):
             bpy.context.window_manager["skip_material_sync_flag"] = True
             fn.set_material_by_name(ob, self.material)
 
+        from .gizmo_toolpreset_bar import activate_preset
+        activate_preset(context, self)
         return {"FINISHED"}
 
 '''
@@ -323,16 +325,16 @@ def register_keymap():
     kmi.properties.name = 'Line Draw'
     kmi.properties.mode = 'PAINT_GREASE_PENCIL'
     kmi.properties.tool = 'builtin.brush'
-    kmi.properties.brush = 'Ink Pen'
+    kmi.properties.brush = 'Marker Chisel'
     kmi.properties.stroke_type = 'STROKE'
     kmi.properties.layer = 'Line'
     kmi.properties.icon = 'LINE_DATA'
     kmi.properties.order = 20
-    # kmi.properties.description = 'Set Ink Brush on "Line" layer'
+    # kmi.properties.description = 'Set Marker Chisel brush on "Line" layer'
     # kmi.properties.material = '' # line
     addon_keymaps.append((km, kmi))
     
-    kmi = km.keymap_items.new('storytools.set_draw_tool', type='THREE', value='PRESS')
+    kmi = km.keymap_items.new('storytools.set_draw_tool', type='FOUR', value='PRESS')
     kmi.properties.name = 'Bucket Fill'
     kmi.properties.mode = 'PAINT_GREASE_PENCIL'
     kmi.properties.tool = 'builtin_brush.Fill'
@@ -340,11 +342,11 @@ def register_keymap():
     kmi.properties.layer = 'Color'
     # kmi.properties.material = '' # fill_white
     kmi.properties.icon = 'SHADING_SOLID'
-    kmi.properties.order = 30
+    kmi.properties.order = 40
     # kmi.properties.description = 'Set Fill tool on "Color" layer'
     addon_keymaps.append((km, kmi))
     
-    kmi = km.keymap_items.new('storytools.set_draw_tool', type='FOUR', value='PRESS')
+    kmi = km.keymap_items.new('storytools.set_draw_tool', type='THREE', value='PRESS')
     kmi.properties.name = 'Fill Draw'
     kmi.properties.mode = 'PAINT_GREASE_PENCIL'
     kmi.properties.tool = 'builtin.brush'
@@ -352,7 +354,7 @@ def register_keymap():
     kmi.properties.stroke_type = 'FILL'
     kmi.properties.layer = 'Color'
     kmi.properties.icon = 'NODE_MATERIAL'
-    kmi.properties.order = 40
+    kmi.properties.order = 30
     # kmi.properties.description = 'Set draw tool "Color" layer'
     # kmi.properties.material = '' # fill_white
     addon_keymaps.append((km, kmi))

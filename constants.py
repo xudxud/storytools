@@ -11,9 +11,9 @@ LAYERBRUSH_PREFIX = 'brush--'       # value: brush AssetWeakReference as 'librar
 ## stroke_type: 'STROKE' | 'FILL' | 'BOTH' | 'NONE' (no change)
 DEFAULT_LAYER_STACK = (
     ('Annotate', 'Red', 'Pen', 'STROKE'),
-    ('Sketch', 'Black', 'Pencil', 'STROKE'),
-    ('Line', 'Black', 'Ink Pen', 'STROKE'),
-    ('Color', 'White', 'Fill', 'NONE'),
+    ('Line', 'Black', 'Marker Chisel', 'STROKE'),
+    ('Sketch', 'Blue', 'Pencil', 'STROKE'),
+    ('Color', 'Grey_mid', 'Fill', 'NONE'),
 )
 
 DEFAULT_ACTIVE_LAYER = 'Sketch'
