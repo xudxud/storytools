@@ -930,7 +930,8 @@ def register_panels(category_name=None):
     If category_name is None, use the category from preferences.
     """
     if category_name is None:
-        category_name = get_addon_prefs().category.strip()
+        category_name = get_addon_prefs().category
+    category_name = category_name.strip() or 'Storytools'
         
     for cls in panel_classes:
         try:

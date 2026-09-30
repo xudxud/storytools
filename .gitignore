@@ -5,3 +5,4 @@ pyrightconfig.json
 *.vscode
 tests/*
 !tests/test_preset_undo.py
+!tests/blender_preferences_checks.py

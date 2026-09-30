@@ -61,8 +61,12 @@ def toggle_toolpreset_buttons(self, _):
 
 def reload_toolpreset_buttons():
     from . import gizmo_toolpreset_bar
-    bpy.utils.unregister_class(gizmo_toolpreset_bar.STORYTOOLS_GGT_toolpreset_bar)
-    bpy.utils.register_class(gizmo_toolpreset_bar.STORYTOOLS_GGT_toolpreset_bar)
+    from .prefs_io_core import set_class_registered
+    if not get_addon_prefs().active_presetbar:
+        return
+    set_class_registered(gizmo_toolpreset_bar.STORYTOOLS_GGT_toolpreset_bar, False)
+    for cls in gizmo_toolpreset_bar.classes:
+        set_class_registered(cls, True)
 
 def redraw_viewport_bars(self, context):
     from .prefs_io_core import is_restoring
@@ -80,8 +84,13 @@ class STORYTOOLS_OT_reload_toolpreset_ui(bpy.types.Operator):
         \nNecessary if 'set draw tool' shortcuts have just been customized"
     bl_options = {"REGISTER", "INTERNAL"}
 
+    @classmethod
+    def poll(cls, context):
+        return get_addon_prefs().active_presetbar
+
     def execute(self, context):
         reload_toolpreset_buttons()
+        redraw_viewport_bars(self, context)
         return {'FINISHED'}
 
 def ui_in_sidebar_update(self, _):
@@ -641,12 +650,14 @@ class STORYTOOLS_prefs(bpy.types.AddonPreferences):
             bcol = box.column()
             bcol.label(text='Tool Preset Bar Settings:', icon='NODE_TOP')
             bcol.prop(self, 'active_presetbar')
-            bcol.prop(self, 'presetbar_margin')
-            bcol.prop(self, 'presetbar_gap_size', text='Buttons Spread')
-            bcol.prop(self, 'presetbar_backdrop_size')
-            bcol.prop(self, 'presetbar_background_opacity')
+            tool_col = bcol.column()
+            tool_col.active = self.active_presetbar
+            tool_col.prop(self, 'presetbar_margin')
+            tool_col.prop(self, 'presetbar_gap_size', text='Buttons Spread')
+            tool_col.prop(self, 'presetbar_backdrop_size')
+            tool_col.prop(self, 'presetbar_background_opacity')
             if bpy.app.version >= (5, 2, 0):
-                bcol.prop(self, 'presetbar_background_color')
+                tool_col.prop(self, 'presetbar_background_color')
 
             # col.separator()
 
@@ -723,9 +734,13 @@ class STORYTOOLS_prefs(bpy.types.AddonPreferences):
             # bcol.prop(self, 'active_map_toolbar')
             tool_col = bcol.column()
             tool_col.prop(self, 'use_map_name')
-            tool_col.prop(self, 'map_name_size')
+            subcol = tool_col.column()
+            subcol.active = self.use_map_name
+            subcol.prop(self, 'map_name_size')
             tool_col.prop(self, 'use_map_dot')
-            tool_col.prop(self, 'map_dot_size')
+            subcol = tool_col.column()
+            subcol.active = self.use_map_dot
+            subcol.prop(self, 'map_dot_size')
             # tool_col.prop(self, 'map_always_frame_objects')
 
             ## Potential future Customization
@@ -736,7 +751,8 @@ class STORYTOOLS_prefs(bpy.types.AddonPreferences):
 
         elif self.pref_tab == 'GPSETTINGS':
             # region GP settings
-            col.label(text='Grease Pencil Settings:', icon='GREASEPENCIL')
+            col.label(text='New Grease Pencil Object Defaults:', icon='GREASEPENCIL')
+            col.label(text='Applied to objects created through Storytools', icon='INFO')
             row = col.row(align=True)
             row.prop(self, 'default_placement', text='Set Placement / Orientation')
             row.prop(self, 'default_orientation', text='')
@@ -825,7 +841,7 @@ class STORYTOOLS_prefs(bpy.types.AddonPreferences):
                 row.label(text=f'Material "{props.material}" targeted by tool preset "{preset_name}" is not in stack', icon='ERROR')
                 op_hint = row.operator('storytools.info_note', text='', icon='INFO')
                 op_hint.title = 'Missing Tool preset material target'
-                op_hint.text = f'Toolpreset shortcut "{preset_name}" is targeting material name "{props.layer}"\
+                op_hint.text = f'Toolpreset shortcut "{preset_name}" is targeting material name "{props.material}"\
                                \nThis name is not in material stack.\
                                \nAdd this name in material stack or change/remove the material tool preset target (in Tool Presets Tab)'
 
@@ -855,8 +871,8 @@ class STORYTOOLS_prefs(bpy.types.AddonPreferences):
             # col.prop(self.gp, 'frame_offset')
 
             col.separator()
-            col.label(text='GP control bar behavior:')
-            col.label(text='Following settings are replicated in scene on new files', icon='INFO')
+            col.label(text='GP Control Bar Global Defaults:')
+            col.label(text='Applied on change and file load to scenes using global sync', icon='INFO')
             ## All at once
             for prop_name in self.gp.bl_rna.properties.keys():
                 if prop_name in ('name', 'rna_type'):
@@ -1173,31 +1189,13 @@ class STORYTOOLS_OT_open_addon_prefs(bpy.types.Operator):
 ### Handler for prefs to scene properties replications
 @persistent
 def replicate_preference_settings(dummy):
-    ## only on new file ?
-    # if bpy.data.filepath != "":
-    #     return
-
-    ## Instead of doing only on new file, use local scene sync user choice
+    '''Apply global GP defaults on file load and after restoring preferences'''
+    from .properties import copy_gp_settings
     prefs = get_addon_prefs()
-
-    ## Ensure default layer/material stacks are filled (no-op when already populated)
-    # seed_default_stacks(prefs)
-
-    ## On register, overwrite scene gp settings property with preferences ones (only on new files)
     for scene in bpy.data.scenes:
         if scene.storytools_gp_settings.sync_mode != 'SYNC_GLOBAL':
-            # print('Skip setting replication on scene:', scene.name) #dbg
             continue
-
-        for prop_name in prefs.gp.bl_rna.properties.keys():
-            if prop_name in ('name', 'rna_type', 'sync_mode'):
-                continue
-
-            # print(f'scene {scene.name} -> replicating {prop_name}') #dbg
-
-            # setattr(scene.storytools_gp_settings, prop_name, getattr(prefs.gp, prop_name)) # Setattr Trigger update !
-            
-            scene.storytools_gp_settings[prop_name] = getattr(prefs.gp, prop_name) # Do not trigger update !
+        copy_gp_settings(prefs.gp, scene.storytools_gp_settings)
 
 # region register
 

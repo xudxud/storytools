@@ -18,55 +18,42 @@ from bpy.types import PropertyGroup
 #         if not gp.is_annotation:
 #             gp.edit_line_color[3]=self.edit_lines_opacity
 
+def copy_gp_settings(source, target):
+    '''Copy GP values without triggering update callbacks on the target'''
+    for prop_name, prop in source.bl_rna.properties.items():
+        if prop_name in ('name', 'rna_type', 'sync_mode'):
+            continue
+        value = getattr(source, prop_name)
+        if prop.type == 'ENUM':
+            ## ID properties store the enum's numeric value, not its identifier
+            value = prop.enum_items[value].value
+        target[prop_name] = value
+
+
 def apply_on_all_scene(self, context):
-    '''Propagate settings on other scene from property update'''
+    '''Apply preference defaults or synchronize the edited scene's GP settings'''
     from .prefs_io_core import is_restoring
     ## Restore replicates preferences to the scenes once, at the end of the import
     if is_restoring():
         return
 
-    ## self seem not always good at loading time, use context.scene
-    # print('context.scene: ', context.scene.name, '\n====') # Dbg
-    
-    current_settings = context.scene.storytools_gp_settings
-    if current_settings.sync_mode == 'SYNC_LOCAL':
-        # print(current_settings.sync_mode, 'SKIP (SYNC_LOCAL)') # Dbg
-        return
-
-    for scn in bpy.data.scenes:
-        if scn == context.scene:
-            # print('> same scene, skip') # Dbg
-            continue
-
-        if scn.storytools_gp_settings.sync_mode == 'SYNC_LOCAL':
-            # print(f'Skip {scn.name} (local mode)') # Dbg
-            # Skip scene using isolate mode
-            continue
-        
-        # print('Propagate properties on scene:', scn.name) # Dbg
-        for prop_name in current_settings.bl_rna.properties.keys():
-            if prop_name in ('name', 'rna_type', 'sync_mode'):
+    if isinstance(self.id_data, bpy.types.Scene):
+        if self.sync_mode == 'SYNC_LOCAL':
+            return
+        for scene in bpy.data.scenes:
+            settings = scene.storytools_gp_settings
+            if scene == self.id_data or settings.sync_mode == 'SYNC_LOCAL':
                 continue
-
-            # value = getattr(context.scene.storytools_gp_settings, prop_name)
-            value = getattr(current_settings, prop_name)
-
-            if prop_name == 'frame_target_layers':
-                ## Set number from the enum (assignation using square bracket wait for an int !)
-                value = {"ACTIVE" : 0, "ACCESSIBLE" : 1, "VISIBLE" : 2}[value]
-            
-            if prop_name == 'keyframe_type':
-                value = {'ALL' : 0, 'CURRENT' : 1, 'KEYFRAME' : 2, 'BREAKDOWN' : 3, 'MOVING_HOLD' : 4, 'EXTREME' : 5, 'JITTER' : 6, 'GENERATED' : 7}[value]
-
-            # print(f'--> Assign {prop_name} = {value}') # Dbg
-            ## assign without triggering reload
-            scn.storytools_gp_settings[prop_name] = value
-
-        ## Is there a way to replicate only active properties ??!
-        ## Selective replication
-        # scn.storytools_gp_settings['frame_offset'] = self.frame_offset
-        # scn.storytools_gp_settings['frame_target_layers'] = self.frame_target_layers
-        # scn.storytools_gp_settings['keyframe_type'] = self.keyframe_type
+            copy_gp_settings(self, settings)
+    else:
+        ## Preferences only affect scenes that opted into global defaults
+        from .fn import get_addon_prefs
+        if self.as_pointer() != get_addon_prefs().gp.as_pointer():
+            return
+        for scene in bpy.data.scenes:
+            settings = scene.storytools_gp_settings
+            if settings.sync_mode == 'SYNC_GLOBAL':
+                copy_gp_settings(self, settings)
 
 display_choice_items = (
         ('AUTO', 'Automatic', 'Show entry only if there is enough space', 0),
