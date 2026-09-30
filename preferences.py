@@ -38,17 +38,11 @@ def toggle_gizmo_buttons(self, _):
     ## (assigning the same value from python would raise on a plain register_class)
     if bpy.app.version >= (5, 2, 0):
         classes = gizmo_toolbar.classes if self.active_toolbar else reversed(gizmo_toolbar.classes)
-        changed = False
         for cls in classes:
-            class_changed = set_class_registered(cls, self.active_toolbar)
-            if cls == gizmo_toolbar.STORYTOOLS_GGT_toolbar:
-                changed = class_changed
+            set_class_registered(cls, self.active_toolbar)
     else:
-        changed = set_class_registered(gizmo_toolbar.STORYTOOLS_GGT_toolbar, self.active_toolbar)
+        set_class_registered(gizmo_toolbar.STORYTOOLS_GGT_toolbar, self.active_toolbar)
         set_class_registered(gizmo_toolbar.STORYTOOLS_GGT_toolbar_switch, self.active_toolbar)
-    if self.active_toolbar and changed:
-        # Force active when user tick the box
-        bpy.context.scene.storytools_settings.show_session_toolbar = True
 
 def toggle_toolpreset_buttons(self, _):
     from . import gizmo_toolpreset_bar

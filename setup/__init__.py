@@ -1,4 +1,5 @@
 from . import (
+    sidebar_setup,
     render_static_storyboard,
     workspace_setup,
     reset_draw_settings,
@@ -11,6 +12,7 @@ from . import (
 )
 
 modules = (
+    sidebar_setup,
     workspace_setup,
     reset_draw_settings,
     story_palettes,

@@ -2,6 +2,7 @@
 
 import bpy
 from .. import fn
+from .sidebar_setup import set_sidebar
 # from pprint import pprint as pp
 
 ## -*- setup drawing settings *-*
@@ -53,32 +54,7 @@ class STORYTOOLS_OT_setup_drawing(bpy.types.Operator):
                 if bpy.context.workspace.tools.from_space_view3d_mode(bpy.context.mode, create=False).idname != tool_id:
                     bpy.ops.wm.tool_set_by_id(name=tool_id)
         
-        ## Show sidebar
-        if prefs.show_sidebar != 'NONE':
-            if context.space_data.show_region_ui and prefs.show_sidebar == 'HIDE':
-                context.space_data.show_region_ui = False
-                # context.area.spaces.update()
-            if not context.space_data.show_region_ui and prefs.show_sidebar == 'SHOW':
-                context.space_data.show_region_ui = True
-                # context.area.spaces.update()
-
-        ## Set sidebar panel
-        if bpy.app.version >= (4,2,0) and prefs.set_sidebar_tab and context.space_data.show_region_ui:
-            tab = prefs.sidebar_tab_target
-            if not tab.strip():
-                tab = 'Storytools'
-            
-            ## 'active_panel_category' is readonly at first (Then goes to false after operator has finished)
-            ## Not working: Try to refresh UI to fix that once sidebar is opened
-            # context.area.regions.update()
-            # context.screen.update_tag()
-            if sidebar := next((r for r in context.area.regions if r.type == 'UI'), None):
-                try:
-                    # For now, just by pass the error, a second call works...
-                    sidebar.active_panel_category = tab
-                    sidebar.tag_redraw()
-                except AttributeError:
-                    pass
+        set_sidebar(context.area, context.window)
 
 
         ## Set opacity at 1.0 and disable pressure on current pen (better to create or load specific brushes)

@@ -20,6 +20,7 @@ from . import ui
 from . import keymaps
 from . import gizmo_toolpreset_bar
 from . import preset_refresh
+from . import viewport_bars
 from .fn import get_addon_prefs
 
 modules = (
@@ -32,6 +33,7 @@ modules = (
     gpencil_ops,
     camera_ops,
     asset_ops,
+    viewport_bars,
     handles,
     object_ops,
     gizmos_objects,

@@ -7,3 +7,7 @@ tests/*
 !tests/test_preset_undo.py
 !tests/blender_preferences_checks.py
 !tests/blender_preset_refresh_ui_checks.py
+!tests/blender_viewport_bars_checks.py
+!tests/blender_viewport_bars_enable_ui_checks.py
+!tests/blender_sidebar_setup_ui_checks.py
+!tests/blender_sidebar_toggle_ui_checks.py

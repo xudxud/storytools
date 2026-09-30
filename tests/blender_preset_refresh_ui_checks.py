@@ -47,6 +47,7 @@ bpy.context.preferences.view.use_save_prompt = False
 area = max((a for a in bpy.context.screen.areas if a.type == 'VIEW_3D'), key=lambda a: a.width * a.height)
 region = next(r for r in area.regions if r.type == 'WINDOW')
 with bpy.context.temp_override(area=area, region=region):
+    bpy.ops.storytools.toggle_viewport_bars()
     bpy.ops.object.grease_pencil_add(type='EMPTY')
 phase = 0
 

@@ -12,6 +12,7 @@ from gpu_extras.batch import batch_for_shader
 from .fn import get_addon_prefs
 from .gizmo_toolpreset_bar import draw_capsule, capsule_from_gizmos
 from . import fn
+from . import viewport_bars
 
 
 USE_CAPSULE_UI = bpy.app.version >= (5, 2, 0)
@@ -102,7 +103,7 @@ class STORYTOOLS_GGT_toolbar(GizmoGroup):
             return False
         ## To only show in camera view
         # return context.space_data.region_3d.view_perspective == 'CAMERA'
-        return not fn.is_minimap_viewport(context)
+        return viewport_bars.is_enabled(context) and not fn.is_minimap_viewport(context)
 
     def setup(self, context):
         ## --- Object
@@ -297,7 +298,7 @@ class STORYTOOLS_GGT_toolbar(GizmoGroup):
         
         section_separator = int(gap_size / 2) # Fixed at 20 ?
         px_scale = context.preferences.system.ui_scale
-        hide_gizmos = not settings.show_session_toolbar or not context.space_data.show_gizmo
+        hide_gizmos = not viewport_bars.is_visible(context) or not context.space_data.show_gizmo
         for gz in self.gizmos:
             gz.hide = hide_gizmos
         if hide_gizmos:
@@ -427,7 +428,7 @@ class STORYTOOLS_GGT_toolbar(GizmoGroup):
 
         section_separator = int(gap_size / 2)
         px_scale = context.preferences.system.ui_scale
-        hide_gizmos = not settings.show_session_toolbar or not context.space_data.show_gizmo
+        hide_gizmos = not viewport_bars.is_visible(context) or not context.space_data.show_gizmo
         self.background_gizmo.hide = hide_gizmos
         for gz in self.button_gizmos:
             gz.hide = hide_gizmos
@@ -674,12 +675,7 @@ class VIEW3D_GT_toggler_shape_widget(Gizmo):
         #             return
         ## /
 
-        settings.show_session_toolbar = not settings.show_session_toolbar
-
-        ## Refresh all 3D areas
-        for area in context.screen.areas:
-            if area.type == 'VIEW_3D':
-                area.tag_redraw()
+        viewport_bars.toggle_expanded(context)
 
 
     def modal(self, context, event, tweak):
@@ -726,7 +722,7 @@ class STORYTOOLS_GGT_toolbar_switch(GizmoGroup):
     def poll(cls, context):
         if not context.space_data.show_gizmo:
             return False
-        return not fn.is_minimap_viewport(context)
+        return viewport_bars.is_enabled(context) and not fn.is_minimap_viewport(context)
 
     # @staticmethod
     # def my_target_operator(context):
@@ -776,7 +772,7 @@ class STORYTOOLS_GGT_toolbar_switch(GizmoGroup):
         y_loc = 4 * px_scale + fn.get_header_margin(context, overlap=True)
 
         mat = Matrix.Translation((x_loc, y_loc, 0))
-        if context.scene.storytools_settings.show_session_toolbar:
+        if viewport_bars.is_visible(context):
             mat = mat @ vertical_flip_mat
 
         self.gz_toggle_bar.matrix_basis = mat
@@ -788,7 +784,7 @@ class STORYTOOLS_GGT_toolbar_switch(GizmoGroup):
 class STORYTOOLS_OT_toggle_bottom_bar(Operator):
     bl_idname = "storytools.toggle_bottom_bar"
     bl_label = 'Toggle Bottom Bar'
-    bl_description = "Toggle Storytools Bar"
+    bl_description = "Collapse or expand Storytools bars in this viewport only"
     bl_options = {'REGISTER'} # , 'INTERNAL'
 
     prop_name : bpy.props.StringProperty(default='show_session_toolbar')
@@ -798,10 +794,7 @@ class STORYTOOLS_OT_toggle_bottom_bar(Operator):
         # print('prop_name: ', self.prop_name)
         settings = context.scene.storytools_settings
         # setattr(settings, self.prop_name, not getattr(settings, self.prop_name))
-        settings.show_session_toolbar = not settings.show_session_toolbar
-        for area in context.screen.areas:
-            if area.type == 'VIEW_3D':
-                area.tag_redraw()
+        viewport_bars.toggle_expanded(context)
         return {"FINISHED"}
 
 classes=(

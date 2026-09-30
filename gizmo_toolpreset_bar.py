@@ -213,7 +213,9 @@ class STORYTOOLS_GGT_toolpreset_bar(GizmoGroup):
         if not context.space_data.show_gizmo:
             return False
         # return 'GREASEPENCIL' in context.mode and not fn.is_minimap_viewport(context)
-        return context.object and context.object.type == 'GREASEPENCIL' and not fn.is_minimap_viewport(context)
+        from . import viewport_bars
+        return (viewport_bars.is_enabled(context) and context.object
+                and context.object.type == 'GREASEPENCIL' and not fn.is_minimap_viewport(context))
 
     def setup(self, context):
 
@@ -278,9 +280,11 @@ class STORYTOOLS_GGT_toolpreset_bar(GizmoGroup):
         px_scale = context.preferences.system.ui_scale
 
         ## Toggle on/off with same session as bottom control bar
+        from . import viewport_bars
+        visible = viewport_bars.is_visible(context)
         for gz in self.gizmos:
-            gz.hide = not settings.show_session_toolbar
-        if not settings.show_session_toolbar:
+            gz.hide = not visible
+        if not visible:
             return
         
         region = context.region

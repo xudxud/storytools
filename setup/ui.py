@@ -1,5 +1,7 @@
 import bpy
 from .. import fn
+from .. import viewport_bars
+from .sidebar_setup import is_sidebar_active
 
 class STORYTOOLS_PT_viewport_setup(bpy.types.Panel):
     bl_space_type = "VIEW_3D"
@@ -17,8 +19,8 @@ class STORYTOOLS_PT_viewport_setup(bpy.types.Panel):
         layout = self.layout
         if fn.is_minimap_viewport(context):
             layout.operator("storytools.map_frame_objects", text="", icon="ZOOM_SELECTED")
-        else:
-            layout.operator("storytools.setup_drawing", text='', icon='GREASEPENCIL')
+        # Popovers also draw this header inline beside their dropdown button.
+        # The normal viewport pencil is drawn explicitly in drawing_setup_ui.
 
         # if fn.is_minimap_viewport(context):
         #     if context.region.type == "HEADER":
@@ -57,6 +59,8 @@ class STORYTOOLS_PT_viewport_setup(bpy.types.Panel):
                 col.operator("storytools.disable_minimap_viewport", text='Disable Minimap Viewport', icon='LOOP_BACK')
 
         else:
+            viewport_bars.draw_toggle(col, context)
+            col.separator()
             ## settings 
             # col.label(text='Draw settings')
             # col.operator('storytools.setup_drawing', text='Quick UI Reset', icon='GREASEPENCIL')
@@ -154,8 +158,16 @@ class STORYTOOLS_MT_static_storyboard_options(bpy.types.Menu):
 
 ## Options related to static storyboard
 def drawing_setup_ui(self, context):
-    """Drawing Setup pop-up to set in viewport header"""
-    self.layout.popover('STORYTOOLS_PT_viewport_setup', text='') # icon='GREASEPENCIL'
+    """Sidebar toggle and viewport setup popover in the viewport header."""
+    if fn.is_minimap_viewport(context):
+        self.layout.popover('STORYTOOLS_PT_viewport_setup', text='')
+        return
+    row = self.layout.row(align=True)
+    button = row.row(align=True)
+    button.enabled = fn.get_addon_prefs().show_sidebar_ui
+    button.operator('storytools.toggle_sidebar', text='', icon='GREASEPENCIL',
+                    depress=is_sidebar_active(context))
+    row.popover('STORYTOOLS_PT_viewport_setup', text='')
 
 
 classes = (

@@ -2,6 +2,16 @@
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+4.2.0
+
+- added: per-viewport Storytools bar visibility, saved with the blend file and template startup layouts; new and split viewports default to disabled
+- changed: the bar visibility toggle is available at the top of the viewport setup popover
+- changed: the viewport header has a state-driven pencil button to open the Storytools sidebar tab or close the sidebar, with a separate settings dropdown; highlighting follows the actual sidebar visibility and active category
+- fixed: sidebar setup opens and selects the configured tab in one operation through deferred, bounded retries tied to the target window and viewport
+- fixed: addon activation defers viewport data access until Blender leaves its restricted registration context, with safe cleanup of partially registered viewport bar components
+- fixed: rapid sidebar toggle cancellation during region animation and duplicated pencil icons and dropdown arrows in the viewport header
+- added: Blender 5.2 checks for addon enable/disable, viewport splitting, saved state restoration, template workspace append, sidebar targeting and header toggle behavior
+
 4.1.0
 
 - changed: this fork is maintained by xuxu, with its own release schedule and repository links; the original plugin name, extension ID, attribution and GPL license are retained
