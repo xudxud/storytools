@@ -21,16 +21,16 @@ from bpy_extras.io_utils import ExportHelper, ImportHelper
 from . import prefs_io_core as core
 from .prefs_io_core import restoring, set_class_registered
 from .fn import get_addon_prefs
-from .preferences import PREFERENCE_UI_PROPS
+from .preferences import PREFERENCE_UI_PROPS, LEGACY_BAR_PROPS
 
 ## Shown in console messages
 ADDON_LABEL = 'Storytools'
 
 ## Bump for non backward compatible json layout
-FORMAT_VERSION = 1
+FORMAT_VERSION = 2
 
 ## Pure UI state on top of the generic exclusions, not meaningful to transfer
-SKIP_PROPS = core.DEFAULT_SKIP | {'pref_tab'} | PREFERENCE_UI_PROPS
+SKIP_PROPS = core.DEFAULT_SKIP | {'pref_tab'} | PREFERENCE_UI_PROPS | LEGACY_BAR_PROPS
 
 ## Tool preset shortcuts are the keymap items running this operator
 PRESET_IDNAME = 'storytools.set_draw_tool'
@@ -41,16 +41,54 @@ GP_DRAW_KM_ALIASES = ('Grease Pencil Draw Mode', 'Grease Pencil Paint Mode')
 
 # region storytools bindings
 
+def shared_bar_appearance_data(data):
+    """Convert old per-bar fields; bottom-bar values win when both were stored."""
+    if not isinstance(data, dict):
+        return data
+    data = dict(data)
+    for suffix in ('color', 'opacity'):
+        shared = 'bar_background_' + suffix
+        bottom = 'toolbar_background_' + suffix
+        top = 'presetbar_background_' + suffix
+        if shared not in data:
+            if bottom in data:
+                data[shared] = data[bottom]
+            elif top in data:
+                data[shared] = data[top]
+        data.pop(bottom, None)
+        data.pop(top, None)
+    return data
+
+
+def migrate_bar_appearance(prefs):
+    """Migrate saved Blender preferences without overwriting new shared values."""
+    legacy = {name: getattr(prefs, name) for name in LEGACY_BAR_PROPS
+              if prefs.is_property_set(name)}
+    migrated = False
+    with restoring():
+        for name, value in shared_bar_appearance_data(legacy).items():
+            if not prefs.is_property_set(name):
+                setattr(prefs, name, value)
+                migrated = True
+        for name in legacy:
+            prefs.property_unset(name)
+            migrated = True
+    if migrated:
+        bpy.context.preferences.is_dirty = True
+
+
 def prefs_to_json(prefs=None):
     """Dump the addon preferences to a json compatible dict"""
     prefs = prefs if prefs is not None else get_addon_prefs()
+    migrate_bar_appearance(prefs)
     return core.prop_to_json(prefs, skip=SKIP_PROPS)
 
 
 def json_to_prefs(data, prefs=None, log=None):
     """Apply a preferences dict, must run inside `restoring()`"""
     prefs = prefs if prefs is not None else get_addon_prefs()
-    return core.json_to_prop(prefs, data, path='preferences', log=log, skip=SKIP_PROPS)
+    return core.json_to_prop(prefs, shared_bar_appearance_data(data),
+                             path='preferences', log=log, skip=SKIP_PROPS)
 
 
 def tool_presets_to_json():
@@ -106,11 +144,9 @@ def apply_restored_prefs(prefs):
     ## Viewport gizmo bars
     sync_gizmo_registration(prefs)
 
-    ## Toolpreset bar content is built from the keymap, force a rebuild
-    if prefs.active_presetbar:
-        from . import gizmo_toolpreset_bar
-        set_class_registered(gizmo_toolpreset_bar.STORYTOOLS_GGT_toolpreset_bar, False)
-        set_class_registered(gizmo_toolpreset_bar.STORYTOOLS_GGT_toolpreset_bar, True)
+    ## Rebuild from the final keymap, including activation / undo remapping
+    from .preset_refresh import refresh_now
+    refresh_now()
 
     ## Push gp settings to the scenes set on global sync
     replicate_preference_settings(None)

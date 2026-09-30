@@ -6,3 +6,4 @@ pyrightconfig.json
 tests/*
 !tests/test_preset_undo.py
 !tests/blender_preferences_checks.py
+!tests/blender_preset_refresh_ui_checks.py

@@ -60,13 +60,8 @@ def toggle_toolpreset_buttons(self, _):
         set_class_registered(cls, self.active_presetbar)
 
 def reload_toolpreset_buttons():
-    from . import gizmo_toolpreset_bar
-    from .prefs_io_core import set_class_registered
-    if not get_addon_prefs().active_presetbar:
-        return
-    set_class_registered(gizmo_toolpreset_bar.STORYTOOLS_GGT_toolpreset_bar, False)
-    for cls in gizmo_toolpreset_bar.classes:
-        set_class_registered(cls, True)
+    from .preset_refresh import refresh_now
+    refresh_now()
 
 def redraw_viewport_bars(self, context):
     from .prefs_io_core import is_restoring
@@ -80,8 +75,8 @@ def redraw_viewport_bars(self, context):
 class STORYTOOLS_OT_reload_toolpreset_ui(bpy.types.Operator):
     bl_idname = "storytools.reload_toolpreset_ui"
     bl_label = "Reload UI Presets"
-    bl_description = "Reload the toolpreset topbar gizmos in viewport\
-        \nNecessary if 'set draw tool' shortcuts have just been customized"
+    bl_description = "Refresh the viewport preset buttons immediately\
+        \nChanges normally update automatically"
     bl_options = {"REGISTER", "INTERNAL"}
 
     @classmethod
@@ -242,6 +237,10 @@ class STORYTOOLS_UL_material_stack_entries(bpy.types.UIList):
 PREFERENCE_UI_PROPS = {
     'ui_expand_interface', 'ui_expand_helpers', 'ui_expand_camera',
 }
+LEGACY_BAR_PROPS = {
+    'toolbar_background_color', 'toolbar_background_opacity',
+    'presetbar_background_color', 'presetbar_background_opacity',
+}
 
 
 def draw_preferences_section(layout, prefs, section_id, title, icon):
@@ -338,19 +337,32 @@ class STORYTOOLS_prefs(bpy.types.AddonPreferences):
         default=15,
         min=12, max=30)
 
-    toolbar_background_opacity : FloatProperty(
+    bar_background_opacity : FloatProperty(
         name='Background Opacity',
-        description="Opacity of the bottom control bar background",
+        description="Background opacity shared by the top preset bar and bottom control bar",
         default=0.77,
         min=0.0, max=1.0, subtype='FACTOR',
         update=redraw_viewport_bars)
 
-    toolbar_background_color : FloatVectorProperty(
+    bar_background_color : FloatVectorProperty(
         name='Background Color',
-        description="Color of the bottom control bar capsule background",
+        description="Background color shared by the top preset bar and bottom control bar",
         default=(0.0, 0.0, 0.0), min=0.0, max=1.0,
         subtype='COLOR_GAMMA', size=3,
         update=redraw_viewport_bars)
+
+    ## RNA access to old saved preferences is needed for one-time migration.
+    ## These are hidden, unused for drawing, and excluded from new backups.
+    toolbar_background_opacity : FloatProperty(
+        default=0.77, min=0.0, max=1.0, options={'HIDDEN'})
+    presetbar_background_opacity : FloatProperty(
+        default=0.77, min=0.0, max=1.0, options={'HIDDEN'})
+    toolbar_background_color : FloatVectorProperty(
+        default=(0.0, 0.0, 0.0), size=3, min=0.0, max=1.0,
+        subtype='COLOR_GAMMA', options={'HIDDEN'})
+    presetbar_background_color : FloatVectorProperty(
+        default=(0.0, 0.0, 0.0), size=3, min=0.0, max=1.0,
+        subtype='COLOR_GAMMA', options={'HIDDEN'})
 
     toolbar_gap_size : IntProperty(
         name='Button Distance',
@@ -377,20 +389,6 @@ class STORYTOOLS_prefs(bpy.types.AddonPreferences):
         description="Backdrop size of the preset bar icons (Blender gizmo buttons are around 14)",
         default=15,
         min=12, max=40)
-
-    presetbar_background_opacity : FloatProperty(
-        name='Background Opacity',
-        description="Opacity of the top tool preset bar background",
-        default=0.77,
-        min=0.0, max=1.0, subtype='FACTOR',
-        update=redraw_viewport_bars)
-
-    presetbar_background_color : FloatVectorProperty(
-        name='Background Color',
-        description="Color of the top tool preset bar capsule background",
-        default=(0.0, 0.0, 0.0), min=0.0, max=1.0,
-        subtype='COLOR_GAMMA', size=3,
-        update=redraw_viewport_bars)
 
     ## Minimap settings
 
@@ -448,15 +446,15 @@ class STORYTOOLS_prefs(bpy.types.AddonPreferences):
 
     active_blue_gz_color : FloatVectorProperty(
         name="Active Blue Color",
-        description="Color for active view lock and Grease Pencil draw buttons",
+        description="Color for the active top-bar preset, view lock and Grease Pencil draw buttons",
         default=(0.372549, 0.564706, 0.854902), min=0, max=1.0, step=3, precision=2,
-        subtype='COLOR_GAMMA', size=3)
+        subtype='COLOR_GAMMA', size=3, update=redraw_viewport_bars)
 
     active_red_gz_color : FloatVectorProperty(
         name="Active Red Color",
         description="Color for active Auto Key and camera lock buttons",
         default=(0.858824, 0.333333, 0.333333), min=0, max=1.0, step=3, precision=2,
-        subtype='COLOR_GAMMA', size=3)
+        subtype='COLOR_GAMMA', size=3, update=redraw_viewport_bars)
 
     ## Distance overlay color
     use_visual_hint: BoolProperty(
@@ -703,16 +701,20 @@ class STORYTOOLS_prefs(bpy.types.AddonPreferences):
                     sub.prop(self, prefix + '_margin', text='Margin')
                     sub.prop(self, prefix + '_gap_size', text='Buttons Spread')
                     sub.prop(self, prefix + '_backdrop_size', text='Icon Size')
-                    sub.prop(self, prefix + '_background_opacity')
-                    if bpy.app.version >= (5, 2, 0):
-                        sub.prop(self, prefix + '_background_color')
-                    if prefix == 'toolbar':
-                        sub.separator()
-                        colors = (('active_blue_gz_color', 'active_red_gz_color')
-                                  if bpy.app.version >= (5, 2, 0) else
-                                  ('object_gz_color', 'gp_gz_color', 'camera_gz_color', 'active_gz_color'))
-                        for prop_name in colors:
-                            sub.prop(self, prop_name)
+
+                box = body.box()
+                box.label(text='Shared Bar Appearance', icon='COLOR')
+                box.label(text='Applies to the top and bottom bars', icon='INFO')
+                sub = box.column()
+                sub.active = self.active_presetbar or self.active_toolbar
+                if bpy.app.version >= (5, 2, 0):
+                    sub.prop(self, 'bar_background_color')
+                sub.prop(self, 'bar_background_opacity')
+                colors = (('active_blue_gz_color', 'active_red_gz_color')
+                          if bpy.app.version >= (5, 2, 0) else
+                          ('object_gz_color', 'gp_gz_color', 'camera_gz_color', 'active_gz_color'))
+                for prop_name in colors:
+                    sub.prop(self, prop_name)
 
             body = draw_preferences_section(
                 col, self, 'ui_expand_helpers', 'Operation Helpers', 'MESH_CIRCLE')
@@ -874,7 +876,7 @@ class STORYTOOLS_prefs(bpy.types.AddonPreferences):
             row.operator('storytools.reload_toolpreset_ui', text='Refresh Preset Bar', icon='FILE_REFRESH')
             col.label(text='Order: 0 uses shortcut order. Expand a preset to edit.', icon='INFO')
             if self.active_presetbar:
-                col.label(text='Refresh the preset bar after making changes', icon='INFO')
+                col.label(text='Changes automatically update the preset bar', icon='INFO')
             else:
                 col.label(text='Enable the top preset bar in Settings to preview changes', icon='INFO')
 
@@ -943,6 +945,8 @@ class STORYTOOLS_OT_restore_keymap_item(bpy.types.Operator):
         #     self.report({'ERROR'}, f'No key item {self.kmi_name} found')
         #     return {"CANCELLED"}
         km.restore_item_to_default(kmi)
+        from .preset_refresh import request_refresh
+        request_refresh()
         ## prefs have changed, set dirty flag
         context.preferences.is_dirty = True
         return {"FINISHED"}
@@ -974,6 +978,8 @@ class STORYTOOLS_OT_remove_keymap_item(bpy.types.Operator):
         
         # kmi = km.keymap_items.from_id(self.item_id)
         km.keymap_items.remove(kmi)
+        from .preset_refresh import request_refresh
+        request_refresh()
         context.preferences.is_dirty = True
         return {"FINISHED"}
 
@@ -994,14 +1000,20 @@ class STORYTOOLS_OT_add_tool_preset_shortcut(bpy.types.Operator):
             draw_mode_name = 'Grease Pencil Paint Mode'
         km = user_km.keymaps.new(name=draw_mode_name, space_type="EMPTY")
         # km.keymap_items
-        existing_presets = [kmi for kmi in km.keymap_items if kmi.idname == 'storytools.set_draw_tool']
-        
-        name = f'Preset {len(existing_presets)}'
-        kmi = km.keymap_items.new('storytools.set_draw_tool', type='F6', value='PRESS')
+        existing_names = {kmi.properties.name for _km, kmi in get_tool_presets_keymap()}
+        index = 1
+        while f'Preset {index}' in existing_names:
+            index += 1
+        name = f'Preset {index}'
+        kmi = km.keymap_items.new('storytools.set_draw_tool', type='NONE', value='PRESS')
         ## Set default values 
         kmi.properties.name = name
         kmi.properties.mode = 'PAINT_GREASE_PENCIL'
         kmi.properties.tool = 'builtin.brush'
+        kmi.show_expanded = True
+        context.preferences.is_dirty = True
+        from .preset_refresh import request_refresh
+        request_refresh()
         return {'FINISHED'}
 
 
@@ -1040,6 +1052,8 @@ _filling_attempts = 0
 def _seed_default_stacks_timer():
     global _filling_attempts
     try:
+        from .prefs_io import migrate_bar_appearance
+        migrate_bar_appearance(get_addon_prefs())
         seed_default_stacks()
     except Exception:
         ## Preferences may not be available yet, retry a few times

@@ -2,6 +2,24 @@
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+4.1.0
+
+- changed: this fork is maintained by xuxu, with its own release schedule and repository links; the original plugin name, extension ID, attribution and GPL license are retained
+- added: automatic, debounced updates of the top preset bar after preset and shortcut changes; manual refresh remains available
+- added: unique names, unassigned shortcuts and expanded editing for newly created presets
+- changed: top and bottom bars share background color and opacity, grouped with active state colors in `Shared Bar Appearance`
+- changed: settings use three top-level collapsible groups; GP layer and material stacks retain direct row editing
+- changed: default Grease Pencil placement is `3D Cursor`
+- changed: preferences backup format is version 2, with automatic conversion of older per-bar appearance settings; bottom-bar values take precedence when both were stored
+- fixed: preserve preset highlights across cosmetic changes and update undo/redo signatures; clear highlights when behavior changes or a preset is hidden, disabled or removed
+- fixed: preset buttons retain independent property snapshots so keyconfig edits and deletions cannot leave dangling RNA references during drawing
+- fixed: pixel alignment of top-bar icons and active backdrops at different UI scales
+- fixed: GP preference updates use the edited values and respect scene sync modes, including enum values on file load and restore
+- fixed: settings enable/disable state, safe preset refresh, empty sidebar category fallback and missing-material hint text
+- added: Blender 5.1/5.2 checks for preferences migration, preset refresh and foreground viewport behavior
+
+Versions below describe the upstream project history.
+
 4.0.0
 
 - changed: reword some tootips

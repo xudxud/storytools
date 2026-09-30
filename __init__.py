@@ -19,6 +19,7 @@ from . import handles
 from . import ui
 from . import keymaps
 from . import gizmo_toolpreset_bar
+from . import preset_refresh
 from .fn import get_addon_prefs
 
 modules = (
@@ -39,6 +40,7 @@ modules = (
     ui,
     keymaps,
     gizmo_toolpreset_bar,
+    preset_refresh,
 )
 
 def register():

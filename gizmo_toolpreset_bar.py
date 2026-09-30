@@ -4,6 +4,7 @@
 
 import bpy
 import gpu
+from types import SimpleNamespace
 from bpy.types import (
     Operator,
     GizmoGroup,
@@ -191,10 +192,10 @@ class STORYTOOLS_GT_presetbar_background(Gizmo):
 
     def draw(self, context):
         prefs = fn.get_addon_prefs()
-        if self.capsule and prefs.presetbar_background_opacity:
+        if self.capsule and prefs.bar_background_opacity:
             draw_capsule(context, *self.capsule,
-                         prefs.presetbar_background_opacity,
-                         prefs.presetbar_background_color)
+                         prefs.bar_background_opacity,
+                         prefs.bar_background_color)
 
     def test_select(self, context, location):
         return -1
@@ -251,7 +252,12 @@ class STORYTOOLS_GGT_toolpreset_bar(GizmoGroup):
             op.description = props.description
             op.shortcut = kmi.to_string() # Shortcut text for description
             self.tool_preset_gizmos.append(gz)
-            self.tool_preset_props.append(props)
+            # Keyconfig edits/removals can free these RNA properties before the
+            # debounced refresh. Never dereference an old keymap item while drawing.
+            self.tool_preset_props.append(SimpleNamespace(**{
+                name: getattr(props, name) for name in (
+                    'name', 'order', 'mode', 'tool', 'brush', 'layer',
+                    'material', 'stroke_type', 'icon', 'description')}))
 
         if USE_CAPSULE_UI:
             for gz in self.tool_preset_gizmos:
@@ -301,7 +307,7 @@ class STORYTOOLS_GGT_toolpreset_bar(GizmoGroup):
             gz.scale_basis = backdrop_size
             active = i == selected_index
             gz.draw_options = ({'BACKDROP'} if active else set()) if USE_CAPSULE_UI else {'BACKDROP', 'OUTLINE'}
-            gz.alpha = 1.0 if active or USE_CAPSULE_UI else prefs.presetbar_background_opacity
+            gz.alpha = 1.0 if active or USE_CAPSULE_UI else prefs.bar_background_opacity
             gz.alpha_highlight = 1.0 if active else 0.6
             gz.color = active_blue if active else (0.4, 0.4, 0.4)
             gz.color_highlight = active_blue if active else (0.5, 0.5, 0.5)

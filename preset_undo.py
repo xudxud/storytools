@@ -141,6 +141,15 @@ def undo_redo_post():
     return restored
 
 
+def remap_signatures(remap):
+    """Keep undo/redo highlights in step with edited preset metadata."""
+    for step, transition in list(_transitions.items()):
+        previous_step, before, after, previous_signature, signature = transition
+        _transitions[step] = (previous_step, before, after,
+                              remap.get(previous_signature, previous_signature),
+                              remap.get(signature, signature))
+
+
 def clear():
     global _step_before_undo
     _step_before_undo = None

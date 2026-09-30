@@ -2,36 +2,24 @@
 
 Blender addon - Set of tools for storyboarding in Blender
 
-### Available on extension platform for Blender 5+ ([extension page](https://extensions.blender.org/add-ons/storytools/))
+This project is a fork of [Pullusb/storytools](https://github.com/Pullusb/storytools),
+originally created by Samuel Bernou.
 
-⬇️ Install directly from Blender: Edit > Preferences > Get Extension > search "Storytools" and click install 
+## Upstream resources
 
-#### [Documentation](https://pullusb.github.io/storytools-docs/)
-
----
-
-## Links for 4.2 to 4.5 version and latest dev
-
-Latest stable for Blender 5 and above is on the extension platform
-
-#### [Download latest dev version (manual install for Blender 5+) ](https://github.com/Pullusb/storytools/archive/master.zip)
-
-> /!\ Important notes:
-> - the releases available on release pages are only for older version (below 5.0), see link below
-> - the gpv2 branch (blender 4.0 to 4.2) is no longer maintained.
-> - bl42to45 branch (blender 4.3 to 4.5) is no longer maintained.
-> - version below 4.0 are not supported.
-
-
-#### [Downloads for Blender 4.0 to 4.2 and 4.3 to 4.5 are listed in release page](https://github.com/Pullusb/storytools/releases)
+- [Original documentation](https://pullusb.github.io/storytools-docs/) describes
+  the shared functionality; this fork's changes are documented below and in the changelog.
+- [Blender extension platform](https://extensions.blender.org/add-ons/storytools/)
+  distributes the upstream version, rather than this fork.
+- [Upstream releases for older Blender versions](https://github.com/Pullusb/storytools/releases).
 
 ---
 
 ![Storytools v1 UI](https://raw.githubusercontent.com/Pullusb/images_repo/master/storytools_ui_demo.jpg)
 
 
-Sponsored by:
-- **Samuel Bernou** (Maintainer)
+Original project sponsored by:
+- **Samuel Bernou**
 
 Previous sponsors:
 - [**CNC**](https://www.cnc.fr/)
@@ -62,7 +50,8 @@ Multiple Choice:
 When creating a new object:
 
 - A default palette for storyboard is automatically loaded
-- Draw mode is auto-reset to `Origin - Front Axis`
+- Draw mode uses the configured placement and orientation defaults
+  (`3D Cursor - Front Axis` by default)
 
 ### Drawing Objects Stack
 
@@ -100,7 +89,19 @@ Camera Actions:
 
 The tool presets are combos or customizables button + shortcut.  
 Each set Blender tool with options, like a Macro.  
-Defined through a shortcut and appear as button in the `Tool preset topbar` at the top of the viewport.
+Configured in addon preferences and displayed in the `Tool preset topbar` at the
+top of the viewport. Shortcuts are optional.
+
+Preset changes automatically update the viewport buttons after a short delay.
+Names, icons, ordering, visibility, behavior and shortcut tooltips are refreshed
+without a manual reload. New presets receive a unique name, start without a
+shortcut and open expanded for editing. Shortcuts can be assigned in preferences.
+
+In **Settings > Interface > Shared Bar Appearance**, the top and bottom bars use
+one background color and opacity. Active state colors are configured in the same
+section. Capsule background colors are available in Blender 5.2 and above.
+Older per-bar preferences and JSON backups are migrated automatically, preferring
+the bottom bar's values when both were stored.
 
 
 <!-- ## TODO
