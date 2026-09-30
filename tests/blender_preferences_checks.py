@@ -117,6 +117,18 @@ class PreferencesTests(unittest.TestCase):
                 self.assertTrue(hasattr(bpy.types, panel.__name__))
                 self.assertEqual(panel.bl_category, expected)
 
+    def test_ui_fold_state_is_excluded_from_backup_and_restore(self):
+        ui_props = self.addon.preferences.PREFERENCE_UI_PROPS
+        for prop_name in ui_props:
+            setattr(self.prefs, prop_name, True)
+        backup = self.addon.prefs_io.prefs_to_json(self.prefs)
+        self.assertTrue(ui_props.isdisjoint(backup))
+        with self.addon.prefs_io_core.restoring():
+            self.addon.prefs_io.json_to_prefs(
+                {prop_name: False for prop_name in ui_props}, self.prefs)
+        for prop_name in ui_props:
+            self.assertTrue(getattr(self.prefs, prop_name))
+
 
 if __name__ == '__main__':
     result = unittest.TextTestRunner(verbosity=2).run(

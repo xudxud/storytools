@@ -21,6 +21,7 @@ from bpy_extras.io_utils import ExportHelper, ImportHelper
 from . import prefs_io_core as core
 from .prefs_io_core import restoring, set_class_registered
 from .fn import get_addon_prefs
+from .preferences import PREFERENCE_UI_PROPS
 
 ## Shown in console messages
 ADDON_LABEL = 'Storytools'
@@ -29,7 +30,7 @@ ADDON_LABEL = 'Storytools'
 FORMAT_VERSION = 1
 
 ## Pure UI state on top of the generic exclusions, not meaningful to transfer
-SKIP_PROPS = core.DEFAULT_SKIP | {'pref_tab'}
+SKIP_PROPS = core.DEFAULT_SKIP | {'pref_tab'} | PREFERENCE_UI_PROPS
 
 ## Tool preset shortcuts are the keymap items running this operator
 PRESET_IDNAME = 'storytools.set_draw_tool'

@@ -292,6 +292,10 @@ class STORYTOOLS_GGT_toolpreset_bar(GizmoGroup):
         selected_preset = active_preset_signature(context)
         selected_index = active_preset_button_index(selected_preset, self.tool_preset_props)
         active_blue = prefs.active_blue_gz_color if USE_CAPSULE_UI else prefs.active_gz_color
+        # Blender's 16px SVG icons truncate their bottom-left position to integers,
+        # while the backdrop uses the floating-point gizmo center. Snap the icon
+        # origin, accounting for UI scale, so both keep the same rendered center.
+        icon_half_size = 8.0 * px_scale
 
         for i, gz in enumerate(self.tool_preset_gizmos):
             gz.scale_basis = backdrop_size
@@ -303,7 +307,12 @@ class STORYTOOLS_GGT_toolpreset_bar(GizmoGroup):
             gz.color_highlight = active_blue if active else (0.5, 0.5, 0.5)
 
             ## Matrix world is readonly
-            gz.matrix_basis = Matrix.Translation((left_pos + (i * next_pos), vertical_pos, 0))
+            button_x = left_pos + (i * next_pos)
+            button_y = vertical_pos
+            if USE_CAPSULE_UI:
+                button_x = round(button_x - icon_half_size) + icon_half_size
+                button_y = round(button_y - icon_half_size) + icon_half_size
+            gz.matrix_basis = Matrix.Translation((button_x, button_y, 0))
 
         if USE_CAPSULE_UI:
             self.background_gizmo.capsule = (

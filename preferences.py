@@ -218,7 +218,6 @@ class STORYTOOLS_UL_layer_stack_entries(bpy.types.UIList):
         row = layout.row(align=True)
         row.label(text='', icon='BLANK1')
         row.prop(item, 'name', text='', emboss=True, icon='OUTLINER_DATA_GP_LAYER')
-        ## data is the addon prefs (collection owner), search associated material in material stack
         row.prop_search(item, 'material', data, 'material_stack', text='', icon='MATERIAL')
         row.prop(item, 'brush', text='', icon='BRUSH_DATA')
         row.prop(item, 'stroke_type', text='')
@@ -239,9 +238,49 @@ class STORYTOOLS_UL_material_stack_entries(bpy.types.UIList):
         row.prop(item, 'same_color', text='', icon='LINKED' if item.same_color else 'UNLINKED', emboss=False)
         row.prop(item, 'holdout', text='', icon='HOLDOUT_ON' if item.holdout else 'HOLDOUT_OFF', emboss=False)
 
+
+PREFERENCE_UI_PROPS = {
+    'ui_expand_interface', 'ui_expand_helpers', 'ui_expand_camera',
+}
+
+
+def draw_preferences_section(layout, prefs, section_id, title, icon):
+    '''Addon preferences draw inside a box, which cannot host native UI panels'''
+    box = layout.box()
+    header = box.row(align=True)
+    header.use_property_split = False
+    expanded = getattr(prefs, section_id)
+    header.prop(prefs, section_id, text=title,
+                icon='TRIA_DOWN' if expanded else 'TRIA_RIGHT', emboss=False)
+    header.label(text='', icon=icon)
+    return box.column() if expanded else None
+
+
+def draw_stack_controls(layout, prefs, stack):
+    collection = getattr(prefs, stack)
+    index = getattr(prefs, stack + '_index')
+    valid_selection = 0 <= index < len(collection)
+    layout.operator('storytools.stack_entry_add', text='', icon='ADD').stack = stack
+    sub = layout.column(align=True)
+    sub.enabled = valid_selection and len(collection) > 1
+    sub.operator('storytools.stack_entry_remove', text='', icon='REMOVE').stack = stack
+    layout.separator()
+    for direction, icon, enabled in (
+            ('UP', 'TRIA_UP', valid_selection and index > 0),
+            ('DOWN', 'TRIA_DOWN', valid_selection and index < len(collection) - 1)):
+        sub = layout.column(align=True)
+        sub.enabled = enabled
+        op = sub.operator('storytools.stack_entry_move', text='', icon=icon)
+        op.stack, op.direction = stack, direction
+
 # region Preferences
 class STORYTOOLS_prefs(bpy.types.AddonPreferences):
     bl_idname = __package__
+
+    ## Session-only UI state; also excluded explicitly from JSON backup / restore
+    ui_expand_interface : BoolProperty(default=True, options={'HIDDEN', 'SKIP_SAVE'})
+    ui_expand_helpers : BoolProperty(default=True, options={'HIDDEN', 'SKIP_SAVE'})
+    ui_expand_camera : BoolProperty(default=False, options={'HIDDEN', 'SKIP_SAVE'})
 
     category : StringProperty(
             name="Category",
@@ -551,7 +590,7 @@ class STORYTOOLS_prefs(bpy.types.AddonPreferences):
 
     default_placement : EnumProperty(
         name='Placement',
-        default='ORIGIN',
+        default='CURSOR',
         description='Set Grease pencil stroke placement settings when creating new object',
         items=(
             ('ORIGIN', 'Origin', 'Draw stroke at Object origin', 'OBJECT_ORIGIN', 0),
@@ -642,111 +681,74 @@ class STORYTOOLS_prefs(bpy.types.AddonPreferences):
         col = layout.column()
 
         if self.pref_tab == 'SETTINGS':
-            # region Global settings
-            col.prop(self, 'use_warnings')
-            
-            # Tool Presets
-            box = col.box()
-            bcol = box.column()
-            bcol.label(text='Tool Preset Bar Settings:', icon='NODE_TOP')
-            bcol.prop(self, 'active_presetbar')
-            tool_col = bcol.column()
-            tool_col.active = self.active_presetbar
-            tool_col.prop(self, 'presetbar_margin')
-            tool_col.prop(self, 'presetbar_gap_size', text='Buttons Spread')
-            tool_col.prop(self, 'presetbar_backdrop_size')
-            tool_col.prop(self, 'presetbar_background_opacity')
-            if bpy.app.version >= (5, 2, 0):
-                tool_col.prop(self, 'presetbar_background_color')
+            body = draw_preferences_section(col, self, 'ui_expand_interface', 'Interface', 'WINDOW')
+            if body is not None:
+                box = body.box()
+                box.label(text='Sidebar', icon='NODE_SIDE')
+                box.prop(self, 'show_sidebar_ui')
+                sub = box.column()
+                sub.active = self.show_sidebar_ui
+                sub.prop(self, 'category', text='Tab Name')
+                if not self.show_sidebar_ui:
+                    box.label(text='Layer/Material Sync is disabled with the sidebar', icon='INFO')
 
-            # col.separator()
+                for prefix, title, icon, toggle in (
+                        ('presetbar', 'Top Tool Presets Bar', 'NODE_TOP', 'active_presetbar'),
+                        ('toolbar', 'Bottom Control Bar', 'STATUSBAR', 'active_toolbar')):
+                    bar = body.box()
+                    bar.label(text=title, icon=icon)
+                    bar.prop(self, toggle)
+                    sub = bar.column()
+                    sub.active = getattr(self, toggle)
+                    sub.prop(self, prefix + '_margin', text='Margin')
+                    sub.prop(self, prefix + '_gap_size', text='Buttons Spread')
+                    sub.prop(self, prefix + '_backdrop_size', text='Icon Size')
+                    sub.prop(self, prefix + '_background_opacity')
+                    if bpy.app.version >= (5, 2, 0):
+                        sub.prop(self, prefix + '_background_color')
+                    if prefix == 'toolbar':
+                        sub.separator()
+                        colors = (('active_blue_gz_color', 'active_red_gz_color')
+                                  if bpy.app.version >= (5, 2, 0) else
+                                  ('object_gz_color', 'gp_gz_color', 'camera_gz_color', 'active_gz_color'))
+                        for prop_name in colors:
+                            sub.prop(self, prop_name)
 
-            # Sidebar
-            box = col.box()
-            bcol = box.column()
-            bcol.label(text='Sidebar Settings:', icon='NODE_SIDE')
-            bcol.prop(self, 'show_sidebar_ui')
-            subcol = bcol.column()
-            subcol.prop(self, 'category')
-            subcol.active = self.show_sidebar_ui
-            if not self.show_sidebar_ui:
-                bcol.label(text='Layer/Material Sync is disabled when sidebar panel is off', icon='INFO')
+            body = draw_preferences_section(
+                col, self, 'ui_expand_helpers', 'Operation Helpers', 'MESH_CIRCLE')
+            if body is not None:
+                body.prop(self, 'use_warnings')
+                box = body.box()
+                box.label(text='Move In Depth', icon='EMPTY_SINGLE_ARROW')
+                box.prop(self, 'use_visual_hint', text='Visual Hints')
+                sub = box.column(align=True)
+                sub.active = self.use_visual_hint
+                sub.prop(self, 'visual_hint_start_color', text='Near Color')
+                sub.prop(self, 'visual_hint_end_color', text='Far Color')
 
-            # col.separator()
+                box = body.box()
+                box.label(text='Minimap', icon='WORLD_DATA')
+                box.prop(self, 'use_top_view_map', text='Show During Transforms')
+                sub = box.column()
+                sub.active = self.use_top_view_map
+                sub.prop(self, 'top_view_map_size', text='Transform Map Size')
+                box.separator()
+                for toggle, size, title in (
+                        ('use_map_name', 'map_name_size', 'Name Size'),
+                        ('use_map_dot', 'map_dot_size', 'Marker Size')):
+                    box.prop(self, toggle)
+                    sub = box.column()
+                    sub.active = getattr(self, toggle)
+                    sub.prop(self, size, text=title)
 
-            # Controls
-            box = col.box()
-            bcol = box.column()
-            bcol.label(text='Control Bar Settings:', icon='STATUSBAR')
-            bcol.prop(self, 'active_toolbar')
-            tool_col = bcol.column()
-            tool_col.prop(self, 'toolbar_margin')
-            tool_col.prop(self, 'toolbar_gap_size', text='Buttons Spread')
-            tool_col.prop(self, 'toolbar_backdrop_size')
-            tool_col.prop(self, 'toolbar_background_opacity')
-            if bpy.app.version >= (5, 2, 0):
-                tool_col.prop(self, 'toolbar_background_color')
-            # tool_col.prop(self, 'toolbar_icon_bounds')
-            
-            tool_col.separator()
-
-            if bpy.app.version >= (5, 2, 0):
-                tool_col.prop(self, 'active_blue_gz_color')
-                tool_col.prop(self, 'active_red_gz_color')
-            else:
-                tool_col.prop(self, 'object_gz_color')
-                tool_col.prop(self, 'gp_gz_color')
-                tool_col.prop(self, 'camera_gz_color')
-                tool_col.prop(self, 'active_gz_color')
-
-            tool_col.active = self.active_toolbar
-
-            box = col.box()
-            bcol = box.column()
-            bcol.label(text='Tools Settings:', icon='MESH_CIRCLE')
-            # bcol.label(text='Move In Depth', icon='EMPTY_SINGLE_ARROW')
-            bcol.prop(self, 'use_visual_hint', text='Move Object Visual Hints')
-            subcol = bcol.column(align=True)
-            subcol.prop(self, 'visual_hint_start_color', text='Near Color')
-            subcol.prop(self, 'visual_hint_end_color', text='Far Color')
-            subcol.active = self.use_visual_hint
-
-            bcol.separator()
-            bcol.prop(self, 'use_top_view_map', text='Minimap View During Transforms')
-            subcol = bcol.column(align=True)
-            subcol.prop(self, 'top_view_map_size', text='Top View Size')
-            subcol.active = self.use_top_view_map
-
-            ## Camera defaults
-            box = col.box()
-            bcol = box.column()
-            bcol.label(text='New Camera Settings:', icon='CAMERA_DATA')
-            bcol.prop(self, 'default_cam_lens')
-            row = bcol.row(align=True)
-            row.prop(self, 'default_cam_clip_start', text='Clip Range')
-            row.prop(self, 'default_cam_clip_end', text='')
-            bcol.prop(self, 'default_cam_use_dof')
-
-            ## Minimap
-            box = col.box()
-            bcol = box.column()
-            bcol.label(text='Minimap Settings', icon='WORLD_DATA')
-            # bcol.prop(self, 'active_map_toolbar')
-            tool_col = bcol.column()
-            tool_col.prop(self, 'use_map_name')
-            subcol = tool_col.column()
-            subcol.active = self.use_map_name
-            subcol.prop(self, 'map_name_size')
-            tool_col.prop(self, 'use_map_dot')
-            subcol = tool_col.column()
-            subcol.active = self.use_map_dot
-            subcol.prop(self, 'map_dot_size')
-            # tool_col.prop(self, 'map_always_frame_objects')
-
-            ## Potential future Customization
-            # tool_col.prop(self, 'map_toolbar_margin')
-            # tool_col.prop(self, 'map_toolbar_gap_size', text='Buttons Spread')
-            # tool_col.prop(self, 'map_toolbar_backdrop_size')
+            body = draw_preferences_section(
+                col, self, 'ui_expand_camera', 'New Camera Defaults', 'CAMERA_DATA')
+            if body is not None:
+                body.label(text='Applied to cameras created through Storytools', icon='INFO')
+                body.prop(self, 'default_cam_lens')
+                body.prop(self, 'default_cam_clip_start', text='Clip Start')
+                body.prop(self, 'default_cam_clip_end', text='Clip End')
+                body.prop(self, 'default_cam_use_dof')
 
 
         elif self.pref_tab == 'GPSETTINGS':
@@ -779,15 +781,7 @@ class STORYTOOLS_prefs(bpy.types.AddonPreferences):
             row = bcol.row()
             row.template_list("STORYTOOLS_UL_layer_stack_entries", "", self, "layer_stack", self, "layer_stack_index", rows=4)
             side = row.column(align=True)
-            side.operator('storytools.stack_entry_add', text='', icon='ADD').stack = 'layer_stack'
-            subside = side.column(align=True)
-            subside.enabled = len(self.layer_stack) > 1
-            subside.operator('storytools.stack_entry_remove', text='', icon='REMOVE').stack = 'layer_stack'
-            side.separator()
-            ops = side.operator('storytools.stack_entry_move', text='', icon='TRIA_UP')
-            ops.stack, ops.direction = 'layer_stack', 'UP'
-            ops = side.operator('storytools.stack_entry_move', text='', icon='TRIA_DOWN')
-            ops.stack, ops.direction = 'layer_stack', 'DOWN'
+            draw_stack_controls(side, self, 'layer_stack')
             bcol.operator('storytools.stack_reset', text='Reset To Default Layers', icon='LOOP_BACK').stack = 'layer_stack'
 
             ## Warn on tool preset layer targets with no match in stack
@@ -815,15 +809,7 @@ class STORYTOOLS_prefs(bpy.types.AddonPreferences):
             row = bcol.row()
             row.template_list("STORYTOOLS_UL_material_stack_entries", "", self, "material_stack", self, "material_stack_index", rows=5)
             side = row.column(align=True)
-            side.operator('storytools.stack_entry_add', text='', icon='ADD').stack = 'material_stack'
-            subside = side.column(align=True)
-            subside.enabled = len(self.material_stack) > 1
-            subside.operator('storytools.stack_entry_remove', text='', icon='REMOVE').stack = 'material_stack'
-            side.separator()
-            ops = side.operator('storytools.stack_entry_move', text='', icon='TRIA_UP')
-            ops.stack, ops.direction = 'material_stack', 'UP'
-            ops = side.operator('storytools.stack_entry_move', text='', icon='TRIA_DOWN')
-            ops.stack, ops.direction = 'material_stack', 'DOWN'
+            draw_stack_controls(side, self, 'material_stack')
             bcol.operator('storytools.stack_reset', text='Reset To Default Materials', icon='LOOP_BACK').stack = 'material_stack'
 
             ## Warn on material references with no match in stack (layer associations and tool preset targets)
@@ -883,39 +869,21 @@ class STORYTOOLS_prefs(bpy.types.AddonPreferences):
 
         elif self.pref_tab == 'TOOLPRESETS':            
             # region Tool presets
-            """ # Direct draw
-            kc = bpy.context.window_manager.keyconfigs.user
-            user_keymaps = kc.keymaps
-            km = user_keymaps.get('Grease Pencil Paint Mode') # limit to paint mode
-            for kmi in reversed(km.keymap_items):
-                if kmi.idname == 'storytools.set_draw_tool':
-                    ## native kmi draw not needed, using custom
-                    # if kmi.is_user_defined:
-                    #     # col.template_keymap_item_properties(kmi)
-                    #     # draw_kmi(kc, kc.keymaps, km, kmi, col, 0) # native template do not allow removal
-                    #     # continue
-                    draw_kmi_custom(km, kmi, col)
-                    # user_kms.append((km, kmi))
-
-            # for km, kmi in sorted(user_kms, key=lambda x: x[1].type):
-            #     draw_kmi_custom(km, kmi, col)
-            """
-
-            col.label(text='First number is for ordering (order based on shortcut when 0)', icon='INFO')
-            for km, kmi in get_tool_presets_keymap():
-                draw_kmi_custom(km, kmi, col)
-
-            col.separator()
-            row = col.row()
+            row = col.row(align=True)
             row.operator('storytools.add_tool_preset_shortcut', text="Add New Tool Preset", icon='ADD')
-            row.operator('storytools.reload_toolpreset_ui', icon='FILE_REFRESH')
+            row.operator('storytools.reload_toolpreset_ui', text='Refresh Preset Bar', icon='FILE_REFRESH')
+            col.label(text='Order: 0 uses shortcut order. Expand a preset to edit.', icon='INFO')
+            if self.active_presetbar:
+                col.label(text='Refresh the preset bar after making changes', icon='INFO')
+            else:
+                col.label(text='Enable the top preset bar in Settings to preview changes', icon='INFO')
 
             col.separator()
-            box = col.box()
-            bcol = box.column()
-            bcol.label(text='After any "Tool Presets" is added or changed', icon='INFO')
-            bcol.label(text='a click on "Reload UI Presets" button above is needed', icon='BLANK1')
-            bcol.label(text='for the modification to take effect in viewport buttons', icon='BLANK1')
+            preset_keymaps = get_tool_presets_keymap()
+            if not preset_keymaps:
+                col.label(text='No tool presets. Add a preset to get started.', icon='INFO')
+            for km, kmi in preset_keymaps:
+                draw_kmi_custom(km, kmi, col)
         
         elif self.pref_tab == 'RESETLIST':
             # region Reset list

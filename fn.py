@@ -1621,7 +1621,8 @@ def draw_kmi_custom(km, kmi, layout):
     #     row.prop(kmi, "propvalue", text="")
     # else:
     #     row.label(text=kmi.name)
-    row.label(text=kmi.name)
+    preset_name = getattr(kmi.properties, 'name', '')
+    row.label(text=preset_name.strip() or kmi.name)
 
     row = split.row()
     map_type = kmi.map_type
